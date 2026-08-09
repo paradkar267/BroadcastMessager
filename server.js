@@ -383,7 +383,18 @@ app.post('/api/webhook', (req, res) => {
 });
 
 // Start Server and Initialize Database
-app.listen(PORT, async () => {
-  console.log(`🚀 Broadcast Miraya Server running on port ${PORT}`);
+const server = app.listen(PORT, async () => {
+  console.log(`🚀 Broadcast Miraya Server running on http://localhost:${PORT}`);
   await initDB();
+}).on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    const ALT_PORT = Number(PORT) + 1;
+    console.log(`⚠️ Port ${PORT} occupied. Falling back to port http://localhost:${ALT_PORT}...`);
+    app.listen(ALT_PORT, async () => {
+      console.log(`🚀 Broadcast Miraya Server running on http://localhost:${ALT_PORT}`);
+      await initDB();
+    });
+  } else {
+    console.error('Server startup error:', err);
+  }
 });
