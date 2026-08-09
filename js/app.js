@@ -6,6 +6,47 @@ document.addEventListener('DOMContentLoaded', async () => {
   let campaigns = JSON.parse(localStorage.getItem('miraya_campaigns')) || INITIAL_CAMPAIGNS;
   let templates = TEMPLATES;
   let selectedTemplate = templates[0];
+  let savedAccounts = [];
+
+  // Multi-Owner Accounts Management Logic
+  async function fetchOwnerAccounts() {
+    try {
+      const res = await fetch('/api/accounts');
+      if (res.ok) {
+        savedAccounts = await res.json();
+        renderOwnerAccountDropdowns();
+      }
+    } catch (e) {
+      console.log('Account fetch error, standalone mode active');
+    }
+  }
+
+  function renderOwnerAccountDropdowns() {
+    const senderSelect = document.getElementById('sender-account-select');
+    const modalSwitcher = document.getElementById('modal-account-switcher');
+
+    if (senderSelect) {
+      if (savedAccounts.length === 0) {
+        senderSelect.innerHTML = `<option value="DEFAULT">Default Meta API Account (${waService.phoneId || 'Unconfigured'})</option>`;
+      } else {
+        senderSelect.innerHTML = savedAccounts.map(acc => `
+          <option value="${acc.id}" ${acc.is_default ? 'selected' : ''}>
+            ${acc.profile_name} (Phone ID: ${acc.phone_id}) ${acc.is_default ? '★ Active Default' : ''}
+          </option>
+        `).join('');
+      }
+    }
+
+    if (modalSwitcher) {
+      let optionsHtml = savedAccounts.map(acc => `
+        <option value="${acc.id}" ${acc.is_default ? 'selected' : ''}>
+          ${acc.profile_name} (${acc.phone_id}) ${acc.is_default ? '★ Active Default' : ''}
+        </option>
+      `).join('');
+      optionsHtml += `<option value="NEW">+ Create New Owner Account</option>`;
+      modalSwitcher.innerHTML = optionsHtml;
+    }
+  }
 
   // DOM Elements
   const navButtons = document.querySelectorAll('.nav-btn');
@@ -151,12 +192,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Customer Delete Handlers
     document.querySelectorAll('.delete-cust-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('click', async (e) => {
         const id = e.target.getAttribute('data-id');
-        customers = customers.filter(c => c.id !== id);
-        localStorage.setItem('miraya_customers', JSON.stringify(customers));
-        renderCustomerTable(customers);
-        renderOverviewMetrics();
+        if (confirm('Are you sure you want to delete this customer?')) {
+          try {
+            await fetch(`/api/customers/${id}`, { method: 'DELETE' });
+            customers = customers.filter(c => c.id != id);
+            localStorage.setItem('miraya_customers', JSON.stringify(customers));
+            renderCustomerTable(customers);
+            renderOverviewMetrics();
+          } catch (err) {
+            console.error('Delete customer error:', err);
+          }
+        }
       });
     });
   }
@@ -579,48 +627,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         </div>
       `;
     }).join('');
-  }
-
-  let savedAccounts = [];
-
-  // Multi-Owner Accounts Management Logic
-  async function fetchOwnerAccounts() {
-    try {
-      const res = await fetch('/api/accounts');
-      if (res.ok) {
-        savedAccounts = await res.json();
-        renderOwnerAccountDropdowns();
-      }
-    } catch (e) {
-      console.log('Account fetch error, standalone mode active');
-    }
-  }
-
-  function renderOwnerAccountDropdowns() {
-    const senderSelect = document.getElementById('sender-account-select');
-    const modalSwitcher = document.getElementById('modal-account-switcher');
-
-    if (senderSelect) {
-      if (savedAccounts.length === 0) {
-        senderSelect.innerHTML = `<option value="DEFAULT">Default Meta API Account (${waService.phoneId || 'Unconfigured'})</option>`;
-      } else {
-        senderSelect.innerHTML = savedAccounts.map(acc => `
-          <option value="${acc.id}" ${acc.is_default ? 'selected' : ''}>
-            ${acc.profile_name} (Phone ID: ${acc.phone_id}) ${acc.is_default ? '★ Active Default' : ''}
-          </option>
-        `).join('');
-      }
-    }
-
-    if (modalSwitcher) {
-      let optionsHtml = savedAccounts.map(acc => `
-        <option value="${acc.id}" ${acc.is_default ? 'selected' : ''}>
-          ${acc.profile_name} (${acc.phone_id}) ${acc.is_default ? '★ Active Default' : ''}
-        </option>
-      `).join('');
-      optionsHtml += `<option value="NEW">+ Create New Owner Account</option>`;
-      modalSwitcher.innerHTML = optionsHtml;
-    }
   }
 
   await fetchOwnerAccounts();
