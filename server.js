@@ -343,20 +343,106 @@ app.post('/api/broadcast', async (req, res) => {
   });
 });
 
-// 6. Settings Endpoints
+// 6. Settings & Multi-Owner Accounts Endpoints
+app.get('/api/accounts', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM api_accounts ORDER BY id ASC');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/accounts', async (req, res) => {
+  const { id, profileName, apiToken, phoneId, wabaId, isDefault } = req.body;
+  if (!profileName || !apiToken || !phoneId) {
+    return res.status(400).json({ error: 'Profile Name, Access Token, and Phone ID are required' });
+  }
+
+  try {
+    if (isDefault) {
+      await pool.query('UPDATE api_accounts SET is_default = FALSE');
+    }
+
+    let result;
+    if (id) {
+      result = await pool.query(`
+        UPDATE api_accounts 
+        SET profile_name = $1, api_token = $2, phone_id = $3, waba_id = $4, is_default = $5
+        WHERE id = $6 RETURNING *
+      `, [profileName, apiToken, phoneId, wabaId || '', isDefault || false, id]);
+    } else {
+      result = await pool.query(`
+        INSERT INTO api_accounts (profile_name, api_token, phone_id, waba_id, is_default)
+        VALUES ($1, $2, $3, $4, $5) RETURNING *
+      `, [profileName, apiToken, phoneId, wabaId || '', isDefault || false]);
+    }
+
+    const acc = result.rows[0];
+
+    // If marked default or only account, set active settings
+    if (isDefault || !id) {
+      await pool.query(`
+        INSERT INTO api_settings (id, api_token, phone_id, waba_id)
+        VALUES (1, $1, $2, $3)
+        ON CONFLICT (id) DO UPDATE SET api_token = EXCLUDED.api_token, phone_id = EXCLUDED.phone_id, waba_id = EXCLUDED.waba_id, updated_at = NOW();
+      `, [acc.api_token, acc.phone_id, acc.waba_id]);
+    }
+
+    res.json(acc);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/accounts/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM api_accounts WHERE id = $1', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/accounts/:id/select', async (req, res) => {
+  try {
+    await pool.query('UPDATE api_accounts SET is_default = FALSE');
+    const result = await pool.query('UPDATE api_accounts SET is_default = TRUE WHERE id = $1 RETURNING *', [req.params.id]);
+    if (result.rows.length > 0) {
+      const acc = result.rows[0];
+      await pool.query(`
+        INSERT INTO api_settings (id, api_token, phone_id, waba_id)
+        VALUES (1, $1, $2, $3)
+        ON CONFLICT (id) DO UPDATE SET api_token = EXCLUDED.api_token, phone_id = EXCLUDED.phone_id, waba_id = EXCLUDED.waba_id, updated_at = NOW();
+      `, [acc.api_token, acc.phone_id, acc.waba_id]);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/settings', async (req, res) => {
   const creds = await getMetaCredentials();
   res.json(creds);
 });
 
 app.post('/api/settings', async (req, res) => {
-  const { apiToken, phoneId, wabaId } = req.body;
+  const { apiToken, phoneId, wabaId, profileName } = req.body;
   try {
     await pool.query(`
       INSERT INTO api_settings (id, api_token, phone_id, waba_id)
       VALUES (1, $1, $2, $3)
       ON CONFLICT (id) DO UPDATE SET api_token = EXCLUDED.api_token, phone_id = EXCLUDED.phone_id, waba_id = EXCLUDED.waba_id, updated_at = NOW();
     `, [apiToken || '', phoneId || '', wabaId || '']);
+
+    if (profileName) {
+      await pool.query(`
+        INSERT INTO api_accounts (profile_name, api_token, phone_id, waba_id, is_default)
+        VALUES ($1, $2, $3, $4, TRUE)
+      `, [profileName, apiToken, phoneId, wabaId || '']);
+    }
+
     res.json({ success: true, message: 'Settings saved to Neon PostgreSQL' });
   } catch (err) {
     res.status(500).json({ error: err.message });

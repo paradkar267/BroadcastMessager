@@ -58,7 +58,19 @@ async function initDB() {
       );
     `);
 
-    // 4. API Settings Table
+    // 4. API Settings / Multi-Owner Accounts Table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS api_accounts (
+        id SERIAL PRIMARY KEY,
+        profile_name VARCHAR(255) NOT NULL,
+        api_token TEXT NOT NULL,
+        phone_id VARCHAR(100) NOT NULL,
+        waba_id VARCHAR(100),
+        is_default BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     await client.query(`
       CREATE TABLE IF NOT EXISTS api_settings (
         id INT PRIMARY KEY DEFAULT 1,

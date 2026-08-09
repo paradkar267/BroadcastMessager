@@ -422,6 +422,15 @@ document.addEventListener('DOMContentLoaded', async () => {
           return;
         }
 
+        // Set active credentials from selected Owner Account
+        const selectedAccountId = document.getElementById('sender-account-select')?.value;
+        if (selectedAccountId && selectedAccountId !== 'DEFAULT') {
+          const chosenAccount = savedAccounts.find(a => a.id == selectedAccountId);
+          if (chosenAccount) {
+            waService.saveConfig(chosenAccount.api_token, chosenAccount.phone_id, chosenAccount.waba_id);
+          }
+        }
+
         // Open Dispatch Modal Visualizer
         openModal('dispatch-progress-modal');
 
@@ -485,48 +494,152 @@ document.addEventListener('DOMContentLoaded', async () => {
     }).join('');
   }
 
+  let savedAccounts = [];
+
+  // Multi-Owner Accounts Management Logic
+  async function fetchOwnerAccounts() {
+    try {
+      const res = await fetch('/api/accounts');
+      if (res.ok) {
+        savedAccounts = await res.json();
+        renderOwnerAccountDropdowns();
+      }
+    } catch (e) {
+      console.log('Account fetch error, standalone mode active');
+    }
+  }
+
+  function renderOwnerAccountDropdowns() {
+    const senderSelect = document.getElementById('sender-account-select');
+    const modalSwitcher = document.getElementById('modal-account-switcher');
+
+    if (senderSelect) {
+      if (savedAccounts.length === 0) {
+        senderSelect.innerHTML = `<option value="DEFAULT">Default Meta API Account (${waService.phoneId || 'Unconfigured'})</option>`;
+      } else {
+        senderSelect.innerHTML = savedAccounts.map(acc => `
+          <option value="${acc.id}" ${acc.is_default ? 'selected' : ''}>
+            ${acc.profile_name} (Phone ID: ${acc.phone_id}) ${acc.is_default ? '★ Active Default' : ''}
+          </option>
+        `).join('');
+      }
+    }
+
+    if (modalSwitcher) {
+      let optionsHtml = savedAccounts.map(acc => `
+        <option value="${acc.id}" ${acc.is_default ? 'selected' : ''}>
+          ${acc.profile_name} (${acc.phone_id}) ${acc.is_default ? '★ Active Default' : ''}
+        </option>
+      `).join('');
+      optionsHtml += `<option value="NEW">+ Create New Owner Account</option>`;
+      modalSwitcher.innerHTML = optionsHtml;
+    }
+  }
+
+  await fetchOwnerAccounts();
+
   // Modal Handlers
   async function initAPIConfigModal() {
+    const accountIdInput = document.getElementById('wa-account-id');
+    const profileNameInput = document.getElementById('wa-profile-name-input');
     const tokenInput = document.getElementById('wa-api-token-input');
     const phoneInput = document.getElementById('wa-phone-id-input');
     const wabaInput = document.getElementById('wa-waba-id-input');
+    const modalSwitcher = document.getElementById('modal-account-switcher');
     const saveBtn = document.getElementById('save-api-config-btn');
+    const deleteBtn = document.getElementById('delete-account-btn');
 
-    try {
-      const res = await fetch('/api/settings');
-      if (res.ok) {
-        const creds = await res.json();
-        if (tokenInput) tokenInput.value = creds.apiToken || '';
-        if (phoneInput) phoneInput.value = creds.phoneId || '';
-        if (wabaInput) wabaInput.value = creds.wabaId || '';
+    function populateFormForAccount(acc) {
+      if (!acc) {
+        if (accountIdInput) accountIdInput.value = '';
+        if (profileNameInput) profileNameInput.value = 'Owner ' + (savedAccounts.length + 1) + ' Account';
+        if (tokenInput) tokenInput.value = '';
+        if (phoneInput) phoneInput.value = '';
+        if (wabaInput) wabaInput.value = '';
+        if (deleteBtn) deleteBtn.style.display = 'none';
+      } else {
+        if (accountIdInput) accountIdInput.value = acc.id;
+        if (profileNameInput) profileNameInput.value = acc.profile_name;
+        if (tokenInput) tokenInput.value = acc.api_token;
+        if (phoneInput) phoneInput.value = acc.phone_id;
+        if (wabaInput) wabaInput.value = acc.waba_id || '';
+        if (deleteBtn) deleteBtn.style.display = 'inline-block';
       }
-    } catch (e) {
-      if (tokenInput && phoneInput) {
-        tokenInput.value = waService.apiToken;
-        phoneInput.value = waService.phoneId;
-        if (wabaInput) wabaInput.value = waService.wabaId;
-      }
+    }
+
+    // Default fill active account
+    const activeAcc = savedAccounts.find(a => a.is_default) || savedAccounts[0];
+    if (activeAcc) {
+      populateFormForAccount(activeAcc);
+    } else {
+      try {
+        const res = await fetch('/api/settings');
+        if (res.ok) {
+          const creds = await res.json();
+          if (tokenInput) tokenInput.value = creds.apiToken || '';
+          if (phoneInput) phoneInput.value = creds.phoneId || '';
+          if (wabaInput) wabaInput.value = creds.wabaId || '';
+        }
+      } catch (e) {}
+    }
+
+    if (modalSwitcher) {
+      modalSwitcher.addEventListener('change', (e) => {
+        const val = e.target.value;
+        if (val === 'NEW') {
+          populateFormForAccount(null);
+        } else {
+          const selected = savedAccounts.find(a => a.id == val);
+          populateFormForAccount(selected);
+        }
+      });
+    }
+
+    if (deleteBtn) {
+      deleteBtn.addEventListener('click', async () => {
+        const id = accountIdInput.value;
+        if (!id) return;
+        if (confirm('Are you sure you want to delete this Owner Account?')) {
+          try {
+            await fetch(`/api/accounts/${id}`, { method: 'DELETE' });
+            alert('Owner Account deleted!');
+            await fetchOwnerAccounts();
+            populateFormForAccount(savedAccounts[0] || null);
+          } catch (err) {
+            alert('Failed to delete account');
+          }
+        }
+      });
     }
 
     if (saveBtn) {
       saveBtn.addEventListener('click', async () => {
         const payload = {
+          id: accountIdInput ? accountIdInput.value : '',
+          profileName: profileNameInput.value.trim(),
           apiToken: tokenInput.value.trim(),
           phoneId: phoneInput.value.trim(),
-          wabaId: wabaInput ? wabaInput.value.trim() : ''
+          wabaId: wabaInput ? wabaInput.value.trim() : '',
+          isDefault: true
         };
+
+        if (!payload.profileName || !payload.apiToken || !payload.phoneId) {
+          alert('Please fill in Account Name, API Access Token, and Phone Number ID!');
+          return;
+        }
 
         waService.saveConfig(payload.apiToken, payload.phoneId, payload.wabaId);
 
         try {
-          await fetch('/api/settings', {
+          await fetch('/api/accounts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
           });
         } catch (err) {}
 
-        alert('Meta WhatsApp API Credentials saved successfully to Neon DB!');
+        alert(`🎉 Owner Account "${payload.profileName}" saved to Neon DB successfully!`);
+        await fetchOwnerAccounts();
         closeModal('api-config-modal');
       });
     }

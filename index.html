@@ -115,6 +115,17 @@ Rhea Mehta, 9765432109" rows="5"></textarea>
               <span style="font-size:0.75rem; color:var(--text-muted);">Format: Name, Phone Number (Example: Priya, 9876543210)</span>
             </div>
 
+            <!-- Sender Account Selection -->
+            <div class="form-group">
+              <label class="form-label" style="display:flex; justify-content:space-between; align-items:center;">
+                <span><i class="fa-brands fa-whatsapp" style="color:var(--primary-wa);"></i> Sender Business Account (Kis Owner Account se Bhejna Hai)</span>
+                <button type="button" class="btn btn-secondary btn-sm" data-open-modal="api-config-modal" style="padding:2px 8px; font-size:0.75rem;"><i class="fa-solid fa-gear"></i> Manage Owner Accounts</button>
+              </label>
+              <select id="sender-account-select" class="form-control">
+                <option value="DEFAULT">Loading Saved Accounts...</option>
+              </select>
+            </div>
+
             <div class="form-group">
               <label class="form-label">Campaign / Message Title</label>
               <input type="text" id="campaign-name-input" class="form-control" value="Exclusive Collection Broadcast" required>
@@ -590,30 +601,48 @@ Team Miraya</textarea>
     </div>
   </div>
 
-  <!-- 5. Meta WhatsApp API Config Modal -->
+  <!-- 5. Meta WhatsApp API Config Modal (Multi-Owner Supported) -->
   <div id="api-config-modal" class="modal-overlay">
-    <div class="modal-container">
+    <div class="modal-container" style="max-width:650px;">
       <div class="modal-header">
-        <h3><i class="fa-brands fa-whatsapp" style="color:var(--primary-wa);"></i> Meta WhatsApp Cloud API Settings</h3>
+        <h3><i class="fa-brands fa-whatsapp" style="color:var(--primary-wa);"></i> Meta WhatsApp API Accounts (Multi-Owner Manager)</h3>
         <button class="close-btn" data-close-modal="api-config-modal">&times;</button>
       </div>
       <div class="modal-body">
-        <div class="form-group">
-          <label class="form-label">Meta Cloud API Access Token</label>
-          <input type="password" id="wa-api-token-input" class="form-control" placeholder="EAAG..." value="">
+        <!-- Saved Owner Accounts Switcher -->
+        <div style="background: rgba(255,255,255,0.03); padding: 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); margin-bottom: 1.25rem;">
+          <label class="form-label" style="color:var(--accent-gold); font-weight:600;"><i class="fa-solid fa-users-gear"></i> Select Active Owner Profile / Business Account:</label>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <select id="modal-account-switcher" class="form-control" style="flex:1;">
+              <option value="NEW">+ Create New Owner Account</option>
+            </select>
+            <button class="btn btn-secondary btn-sm" id="delete-account-btn" style="color:var(--status-failed); display:none;"><i class="fa-solid fa-trash"></i> Delete Account</button>
+          </div>
         </div>
-        <div class="form-group">
-          <label class="form-label">Phone Number ID</label>
-          <input type="text" id="wa-phone-id-input" class="form-control" placeholder="e.g. 10987654321" value="">
-        </div>
-        <div class="form-group">
-          <label class="form-label">WhatsApp Business Account (WABA) ID</label>
-          <input type="text" id="wa-waba-id-input" class="form-control" placeholder="e.g. 9876543210" value="">
-        </div>
+
+        <form id="api-account-form">
+          <input type="hidden" id="wa-account-id" value="">
+          <div class="form-group">
+            <label class="form-label">Account / Owner Profile Name</label>
+            <input type="text" id="wa-profile-name-input" class="form-control" placeholder="e.g. Owner 1 - Miraya Main Store" required value="Default Owner Account">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Meta Cloud API Access Token</label>
+            <input type="password" id="wa-api-token-input" class="form-control" placeholder="EAAG..." required value="">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Phone Number ID</label>
+            <input type="text" id="wa-phone-id-input" class="form-control" placeholder="e.g. 10987654321" required value="">
+          </div>
+          <div class="form-group">
+            <label class="form-label">WhatsApp Business Account (WABA) ID</label>
+            <input type="text" id="wa-waba-id-input" class="form-control" placeholder="e.g. 9876543210" value="">
+          </div>
+        </form>
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" data-close-modal="api-config-modal">Close</button>
-        <button class="btn btn-primary" id="save-api-config-btn">Save API Credentials</button>
+        <button class="btn btn-primary" id="save-api-config-btn"><i class="fa-solid fa-floppy-disk"></i> Save Owner Account</button>
       </div>
     </div>
   </div>
