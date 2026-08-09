@@ -292,61 +292,67 @@ app.post('/api/upload-media', upload.single('poster'), async (req, res) => {
     filename: req.file.originalname
   });
 });
-
 // 5. Execute WhatsApp Broadcast Endpoint
 app.post('/api/broadcast', async (req, res) => {
-  const { name, targetSegment, recipients, message, posterUrl, account_id } = req.body;
+  const { name, targetSegment, recipients, message, posterUrl, account_id, logOnly, campaignId, sentCount, deliveredCount, readCount, failedCount, logs: frontendLogs } = req.body;
 
   if (!Array.isArray(recipients) || recipients.length === 0) {
     return res.status(400).json({ error: 'No recipients provided for broadcast' });
   }
 
-  const campaignId = 'CMP-' + Date.now().toString().slice(-6);
+  const finalCampaignId = campaignId || ('CMP-' + Date.now().toString().slice(-6));
   const accId = account_id || 1;
-  const creds = await getMetaCredentials(accId);
 
-  let metaMediaId = null;
-  // If posterUrl is Base64 string, upload to Meta Media API
-  if (posterUrl && posterUrl.startsWith('data:image')) {
-    try {
-      const base64Data = posterUrl.split(',')[1];
-      const buffer = Buffer.from(base64Data, 'base64');
-      const mime = posterUrl.match(/:(.*?);/)[1] || 'image/jpeg';
-      metaMediaId = await uploadMediaToMeta(buffer, mime, creds.phoneId, creds.apiToken);
-    } catch (e) {
-      console.error('Base64 upload error:', e);
-    }
-  }
+  let finalSent = 0;
+  let finalDelivered = 0;
+  let finalRead = 0;
+  let finalFailed = 0;
+  let finalLogs = [];
 
-  let sentCount = 0;
-  let deliveredCount = 0;
-  let readCount = 0;
-  let failedCount = 0;
-  const logs = [];
-
-  for (const c of recipients) {
-    const formattedMessage = formatTemplateMessage(message, c.name);
-    const result = await sendSingleWhatsAppMessage(c.phone, formattedMessage, posterUrl, metaMediaId, creds.phoneId, creds.apiToken);
-
-    if (result.success) {
-      sentCount++;
-      deliveredCount++;
-      readCount++;
-    } else {
-      failedCount++;
+  if (logOnly) {
+    finalSent = sentCount || 0;
+    finalDelivered = deliveredCount || 0;
+    finalRead = readCount || 0;
+    finalFailed = failedCount || 0;
+    finalLogs = frontendLogs || [];
+  } else {
+    const creds = await getMetaCredentials(accId);
+    let metaMediaId = null;
+    if (posterUrl && posterUrl.startsWith('data:image')) {
+      try {
+        const base64Data = posterUrl.split(',')[1];
+        const buffer = Buffer.from(base64Data, 'base64');
+        const mime = posterUrl.match(/:(.*?);/)[1] || 'image/jpeg';
+        metaMediaId = await uploadMediaToMeta(buffer, mime, creds.phoneId, creds.apiToken);
+      } catch (e) {
+        console.error('Base64 upload error:', e);
+      }
     }
 
-    logs.push({
-      campaignId,
-      msgId: result.messageId || ('ERR.' + Math.random().toString(36).substring(2, 8)),
-      customerName: c.name,
-      phone: c.phone,
-      status: result.success ? 'SENT' : 'FAILED',
-      messageText: formattedMessage,
-      errorDetails: result.error || null
-    });
+    for (const c of recipients) {
+      const formattedMessage = formatTemplateMessage(message, c.name);
+      const result = await sendSingleWhatsAppMessage(c.phone, formattedMessage, posterUrl, metaMediaId, creds.phoneId, creds.apiToken);
 
-    await new Promise(r => setTimeout(r, 80)); // Throttling
+      if (result.success) {
+        finalSent++;
+        finalDelivered++;
+        finalRead++;
+      } else {
+        finalFailed++;
+      }
+
+      finalLogs.push({
+        campaignId: finalCampaignId,
+        msgId: result.messageId || ('ERR.' + Math.random().toString(36).substring(2, 8)),
+        customerName: c.name,
+        phone: c.phone,
+        status: result.success ? 'SENT' : 'FAILED',
+        messageText: formattedMessage,
+        errorDetails: result.error || null
+      });
+
+      await new Promise(r => setTimeout(r, 80));
+    }
   }
 
   // Save Campaign & Logs to Neon PostgreSQL Database
@@ -355,14 +361,15 @@ app.post('/api/broadcast', async (req, res) => {
     await client.query('BEGIN');
     await client.query(`
       INSERT INTO campaigns (id, account_id, name, template_name, target_segment, total_recipients, sent_count, delivered_count, read_count, failed_count, status)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'COMPLETED');
-    `, [campaignId, accId, name || 'Broadcast Campaign', 'custom_broadcast', targetSegment || 'All', recipients.length, sentCount, deliveredCount, readCount, failedCount]);
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'COMPLETED')
+      ON CONFLICT (id) DO UPDATE SET sent_count = EXCLUDED.sent_count, delivered_count = EXCLUDED.delivered_count, read_count = EXCLUDED.read_count, failed_count = EXCLUDED.failed_count, status = EXCLUDED.status;
+    `, [finalCampaignId, accId, name || 'Broadcast Campaign', 'custom_broadcast', targetSegment || 'All', recipients.length, finalSent, finalDelivered, finalRead, finalFailed]);
 
-    for (const log of logs) {
+    for (const log of finalLogs) {
       await client.query(`
         INSERT INTO campaign_logs (campaign_id, msg_id, customer_name, phone, status, message_text, error_details)
         VALUES ($1, $2, $3, $4, $5, $6, $7);
-      `, [log.campaignId, log.msgId, log.customerName, log.phone, log.status, log.messageText, log.errorDetails]);
+      `, [finalCampaignId, log.msgId || log.msg_id, log.customerName || log.customer_name, log.phone, log.status, log.messageText || log.message_text, log.errorDetails || log.error_details]);
     }
     await client.query('COMMIT');
   } catch (dbErr) {
@@ -373,18 +380,16 @@ app.post('/api/broadcast', async (req, res) => {
   }
 
   res.json({
-    id: campaignId,
+    id: finalCampaignId,
     name,
     totalRecipients: recipients.length,
-    sent: sentCount,
-    delivered: deliveredCount,
-    read: readCount,
-    failed: failedCount,
-    logs
+    sent: finalSent,
+    delivered: finalDelivered,
+    read: finalRead,
+    failed: finalFailed,
+    logs: finalLogs
   });
-});
-
-// 6. Settings & Multi-Owner Accounts Endpoints
+});// 6. Settings & Multi-Owner Accounts Endpoints
 app.get('/api/accounts', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM api_accounts ORDER BY id ASC');

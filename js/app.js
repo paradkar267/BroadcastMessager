@@ -586,7 +586,14 @@ document.addEventListener('DOMContentLoaded', async () => {
               targetSegment: isPasteSource ? 'Pasted Numbers' : 'Selected Group',
               recipients: targetRecipients,
               message: customMessage,
-              posterUrl: posterUrl
+              posterUrl: posterUrl,
+              logOnly: true,
+              campaignId: campaignResult.id,
+              sentCount: campaignResult.sent,
+              deliveredCount: campaignResult.delivered,
+              readCount: campaignResult.read,
+              failedCount: campaignResult.failed,
+              logs: campaignResult.logs
             })
           });
           await fetchBackendData(accId);
