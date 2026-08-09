@@ -33,8 +33,20 @@ function formatTemplateMessage(templateBody, recipientName = 'Valued Guest') {
 }
 
 // Helper: Get active Meta credentials from DB or .env
-async function getMetaCredentials() {
+async function getMetaCredentials(accountId = null) {
   try {
+    if (accountId && accountId !== 'DEFAULT') {
+      const accRes = await pool.query('SELECT * FROM api_accounts WHERE id = $1', [accountId]);
+      if (accRes.rows.length > 0) {
+        const row = accRes.rows[0];
+        return {
+          apiToken: row.api_token || process.env.META_ACCESS_TOKEN || '',
+          phoneId: row.phone_id || process.env.META_PHONE_ID || '',
+          wabaId: row.waba_id || process.env.META_WABA_ID || ''
+        };
+      }
+    }
+
     const res = await pool.query('SELECT * FROM api_settings WHERE id = 1');
     if (res.rows.length > 0) {
       const row = res.rows[0];
@@ -244,8 +256,14 @@ app.delete('/api/customers/:id', async (req, res) => {
 
 // 3. Campaigns Endpoints
 app.get('/api/campaigns', async (req, res) => {
+  const { account_id } = req.query;
   try {
-    const result = await pool.query('SELECT * FROM campaigns ORDER BY created_at DESC');
+    let result;
+    if (account_id) {
+      result = await pool.query('SELECT * FROM campaigns WHERE account_id = $1 ORDER BY created_at DESC', [account_id]);
+    } else {
+      result = await pool.query('SELECT * FROM campaigns ORDER BY created_at DESC');
+    }
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -264,7 +282,8 @@ app.get('/api/campaigns/:id/logs', async (req, res) => {
 // 4. Poster Image Upload Endpoint
 app.post('/api/upload-media', upload.single('poster'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  const creds = await getMetaCredentials();
+  const accountId = req.body.account_id || null;
+  const creds = await getMetaCredentials(accountId);
   
   const metaMediaId = await uploadMediaToMeta(req.file.buffer, req.file.mimetype, creds.phoneId, creds.apiToken);
   res.json({
@@ -276,14 +295,15 @@ app.post('/api/upload-media', upload.single('poster'), async (req, res) => {
 
 // 5. Execute WhatsApp Broadcast Endpoint
 app.post('/api/broadcast', async (req, res) => {
-  const { name, targetSegment, recipients, message, posterUrl } = req.body;
+  const { name, targetSegment, recipients, message, posterUrl, account_id } = req.body;
 
   if (!Array.isArray(recipients) || recipients.length === 0) {
     return res.status(400).json({ error: 'No recipients provided for broadcast' });
   }
 
   const campaignId = 'CMP-' + Date.now().toString().slice(-6);
-  const creds = await getMetaCredentials();
+  const accId = account_id || 1;
+  const creds = await getMetaCredentials(accId);
 
   let metaMediaId = null;
   // If posterUrl is Base64 string, upload to Meta Media API
@@ -334,9 +354,9 @@ app.post('/api/broadcast', async (req, res) => {
   try {
     await client.query('BEGIN');
     await client.query(`
-      INSERT INTO campaigns (id, name, template_name, target_segment, total_recipients, sent_count, delivered_count, read_count, failed_count, status)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'COMPLETED');
-    `, [campaignId, name || 'Broadcast Campaign', 'custom_broadcast', targetSegment || 'All', recipients.length, sentCount, deliveredCount, readCount, failedCount]);
+      INSERT INTO campaigns (id, account_id, name, template_name, target_segment, total_recipients, sent_count, delivered_count, read_count, failed_count, status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'COMPLETED');
+    `, [campaignId, accId, name || 'Broadcast Campaign', 'custom_broadcast', targetSegment || 'All', recipients.length, sentCount, deliveredCount, readCount, failedCount]);
 
     for (const log of logs) {
       await client.query(`

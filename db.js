@@ -32,10 +32,11 @@ async function initDB() {
       ALTER TABLE customers ADD COLUMN IF NOT EXISTS account_id INT DEFAULT 1;
     `);
 
-    // 2. Campaigns Table
+    // 2. Campaigns Table (Per-Owner Isolated)
     await client.query(`
       CREATE TABLE IF NOT EXISTS campaigns (
         id VARCHAR(50) PRIMARY KEY,
+        account_id INT DEFAULT 1,
         name VARCHAR(255) NOT NULL,
         template_name VARCHAR(100),
         target_segment VARCHAR(100),
@@ -47,6 +48,10 @@ async function initDB() {
         status VARCHAR(50) DEFAULT 'COMPLETED',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+    `);
+
+    await client.query(`
+      ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS account_id INT DEFAULT 1;
     `);
 
     // 3. Campaign Logs Table

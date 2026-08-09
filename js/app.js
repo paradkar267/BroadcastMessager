@@ -527,6 +527,25 @@ document.addEventListener('DOMContentLoaded', async () => {
         campaigns.unshift(campaignResult);
         localStorage.setItem('miraya_campaigns', JSON.stringify(campaigns));
 
+        // Save campaign and logs to Neon DB for selected Owner Account
+        try {
+          await fetch('/api/broadcast', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              account_id: accId,
+              name: campaignName,
+              targetSegment: isPasteSource ? 'Pasted Numbers' : 'Selected Group',
+              recipients: targetRecipients,
+              message: customMessage,
+              posterUrl: posterUrl
+            })
+          });
+          await fetchBackendData(accId);
+        } catch (err) {
+          console.log('Backend broadcast log save warning:', err.message);
+        }
+
         setTimeout(() => {
           closeModal('dispatch-progress-modal');
           renderOverviewMetrics();
