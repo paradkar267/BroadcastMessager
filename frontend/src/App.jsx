@@ -25,6 +25,46 @@ const TEMPLATES = [
     status: 'APPROVED',
     body: 'Hello {{1}}!\n\nGreat news! Your Miraya order has been dispatched and is on its way. You can track your shipment details via the store dashboard.\n\nThank you for shopping with Miraya!',
     variables: ['name']
+  },
+  {
+    id: 'miraya_festive_invite',
+    title: '✨ Miraya Festive Collection Preview',
+    name: 'miraya_festive_invite',
+    status: 'APPROVED',
+    body: 'Namaste {{1}}!\n\nMiraya Store par is season ka sabse bada Festive Collection launch ho chuka hai! 🌸\n\nAapko cordially invite kiya jata hai hamare exclusive collection preview ke liye. Show this message at checkout to get an instant store credit of ₹500! 🛍️\n\n📍 Location: Miraya Main Outlet, City Road.',
+    variables: ['name']
+  },
+  {
+    id: 'miraya_grand_opening',
+    title: '🛍️ Grand Store Launch / Opening',
+    name: 'miraya_grand_opening',
+    status: 'APPROVED',
+    body: 'Dear {{1}},\n\nMiraya Store is now in your town! 🚀\n\nHamare naye outlet ke GRAND OPENING event me aapka swagat hai! Join us this weekend to experience premium designer suits, sarees, and exclusive apparel.\n\n🎁 Special Opening Offer: FLAT 20% OFF on all purchases above ₹2,999!\n\n📍 Location: Opposite Central Park, City Center.',
+    variables: ['name']
+  },
+  {
+    id: 'miraya_vip_exclusive',
+    title: '💎 VIP Customer Exclusive',
+    name: 'miraya_vip_exclusive',
+    status: 'APPROVED',
+    body: 'Hello {{1}}!\n\nAs one of our most valued VIP customers, we invite you to an exclusive Pre-Sale Showcase! 🥂\n\nPublic sale shuru hone se pehle aaiye aur apne manpasand designer wear par FLAT 35% discount payein.\n\n✨ Strictly by Invitation only.\n📍 Location: Miraya Boutique Suite, 2nd Floor.',
+    variables: ['name']
+  },
+  {
+    id: 'miraya_clearance_sale',
+    title: '🛍️ Season End Clearance Sale',
+    name: 'miraya_clearance_sale',
+    status: 'APPROVED',
+    body: 'Dear {{1}},\n\nThe biggest clearance sale of the year is LIVE at Miraya! 💃\n\nUpgrade your wardrobe with premium designer Kurtis, Suits, and Sarees starting at just ₹799.\n\n🔥 FLAT 50% OFF across the entire stock!\n📍 Location: Miraya Fashion Hub.',
+    variables: ['name']
+  },
+  {
+    id: 'miraya_bridal_showcase',
+    title: '🌸 Bridal & Wedding Collection Showcase',
+    name: 'miraya_bridal_showcase',
+    status: 'APPROVED',
+    body: 'Namaste {{1}}!\n\nShubh Vivah Season ke liye Miraya Bridal Showcase ab open hai! 🌸\n\nExquisite wedding lehengas, bridal sarees, and designer sherwanis ka exclusive collection preview karein. Book a personal stylist session today.\n\n📍 Location: Miraya Bridal Studio, Main Road.',
+    variables: ['name']
   }
 ];
 
@@ -288,6 +328,13 @@ export default function App() {
         setNewCustPhone('');
         setIsAddCustomerOpen(false);
         alert(`🎉 Customer "${newCustName}" saved to Owner Directory successfully!`);
+      } else {
+        const errData = await res.json();
+        if (errData.alreadyAdded) {
+          alert(`⚠️ Already Added: Yeh phone number is account ke liye pehle se added hai!`);
+        } else {
+          alert(`Error: ${errData.error || 'Failed to save customer'}`);
+        }
       }
     } catch (e) {
       alert('Save customer failed');

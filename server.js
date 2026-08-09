@@ -195,18 +195,13 @@ app.post('/api/customers', async (req, res) => {
 
   try {
     const check = await pool.query('SELECT * FROM customers WHERE account_id = $1 AND phone = $2', [accId, formattedPhone]);
-    let result;
     if (check.rows.length > 0) {
-      result = await pool.query(
-        'UPDATE customers SET name = $1, tag = $2 WHERE id = $3 RETURNING *',
-        [name, tag || 'Customer', check.rows[0].id]
-      );
-    } else {
-      result = await pool.query(
-        'INSERT INTO customers (account_id, name, phone, tag) VALUES ($1, $2, $3, $4) RETURNING *',
-        [accId, name, formattedPhone, tag || 'Customer']
-      );
+      return res.status(400).json({ alreadyAdded: true, error: 'Customer phone number already added!' });
     }
+    const result = await pool.query(
+      'INSERT INTO customers (account_id, name, phone, tag) VALUES ($1, $2, $3, $4) RETURNING *',
+      [accId, name, formattedPhone, tag || 'Customer']
+    );
     res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
