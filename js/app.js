@@ -614,17 +614,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     const phoneInput = document.getElementById('wa-phone-id-input');
     const wabaInput = document.getElementById('wa-waba-id-input');
     const modalSwitcher = document.getElementById('modal-account-switcher');
+    const newAccBtn = document.getElementById('new-account-btn');
     const saveBtn = document.getElementById('save-api-config-btn');
     const deleteBtn = document.getElementById('delete-account-btn');
 
     function populateFormForAccount(acc) {
       if (!acc) {
         if (accountIdInput) accountIdInput.value = '';
-        if (profileNameInput) profileNameInput.value = 'Owner ' + (savedAccounts.length + 1) + ' Account';
+        if (profileNameInput) {
+          profileNameInput.value = '';
+          profileNameInput.placeholder = 'e.g. Miraya by Garima';
+          profileNameInput.focus();
+        }
         if (tokenInput) tokenInput.value = '';
         if (phoneInput) phoneInput.value = '';
         if (wabaInput) wabaInput.value = '';
         if (deleteBtn) deleteBtn.style.display = 'none';
+        if (modalSwitcher) modalSwitcher.value = 'NEW';
       } else {
         if (accountIdInput) accountIdInput.value = acc.id;
         if (profileNameInput) profileNameInput.value = acc.profile_name;
@@ -632,6 +638,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (phoneInput) phoneInput.value = acc.phone_id;
         if (wabaInput) wabaInput.value = acc.waba_id || '';
         if (deleteBtn) deleteBtn.style.display = 'inline-block';
+        if (modalSwitcher) modalSwitcher.value = acc.id;
       }
     }
 
@@ -651,6 +658,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       } catch (e) {}
     }
 
+    if (newAccBtn) {
+      newAccBtn.addEventListener('click', () => {
+        populateFormForAccount(null);
+      });
+    }
+
     if (modalSwitcher) {
       modalSwitcher.addEventListener('change', (e) => {
         const val = e.target.value;
@@ -665,7 +678,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (deleteBtn) {
       deleteBtn.addEventListener('click', async () => {
-        const id = accountIdInput.value;
+        const id = accountIdInput ? accountIdInput.value : '';
         if (!id) return;
         if (confirm('Are you sure you want to delete this Owner Account?')) {
           try {
@@ -682,8 +695,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (saveBtn) {
       saveBtn.addEventListener('click', async () => {
+        const isCreatingNew = (modalSwitcher && modalSwitcher.value === 'NEW') || !accountIdInput || !accountIdInput.value;
         const payload = {
-          id: accountIdInput ? accountIdInput.value : '',
+          id: isCreatingNew ? '' : accountIdInput.value,
           profileName: profileNameInput.value.trim(),
           apiToken: tokenInput.value.trim(),
           phoneId: phoneInput.value.trim(),
@@ -699,11 +713,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         waService.saveConfig(payload.apiToken, payload.phoneId, payload.wabaId);
 
         try {
-          await fetch('/api/accounts', {
+          const res = await fetch('/api/accounts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
           });
+          if (res.ok) {
+            const savedAcc = await res.json();
+            if (savedAcc && savedAcc.id) {
+              payload.id = savedAcc.id;
+            }
+          }
 
           await fetch('/api/settings', {
             method: 'POST',
@@ -719,8 +739,12 @@ document.addEventListener('DOMContentLoaded', async () => {
           console.error('Database save warning:', err.message);
         }
 
-        alert(`🎉 Owner Account "${payload.profileName}" saved to Neon DB & Local Storage successfully!`);
+        alert(`🎉 Owner Account "${payload.profileName}" saved to Neon DB successfully!`);
         await fetchOwnerAccounts();
+        if (payload.id) {
+          const newlySaved = savedAccounts.find(a => a.id == payload.id);
+          if (newlySaved) populateFormForAccount(newlySaved);
+        }
         closeModal('api-config-modal');
       });
     }
