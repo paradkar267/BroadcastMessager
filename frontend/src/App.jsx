@@ -185,19 +185,22 @@ export default function App() {
     }
   };
 
-  // 2. Fetch customers and campaigns from database
+  // 2. Fetch customers and campaigns from database in parallel
   const fetchBackendData = async (accId = null) => {
     const targetId = accId || selectedAccountId;
     if (!targetId || targetId === 'DEFAULT') return;
 
     try {
-      const custRes = await fetch(`/api/customers?account_id=${targetId}`);
+      const [custRes, campRes] = await Promise.all([
+        fetch(`/api/customers?account_id=${targetId}`),
+        fetch(`/api/campaigns?account_id=${targetId}`)
+      ]);
+
       if (custRes.ok) {
         const dbCusts = await custRes.json();
         setCustomers(dbCusts || []);
       }
 
-      const campRes = await fetch(`/api/campaigns?account_id=${targetId}`);
       if (campRes.ok) {
         const dbCamps = await campRes.json();
         setCampaigns(dbCamps.map(c => ({

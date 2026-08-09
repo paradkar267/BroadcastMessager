@@ -20,8 +20,17 @@ app.use(cors());
 app.use(express.json({ limit: '25mb' }));
 app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
-// Serve static built React frontend files
-app.use(express.static(path.join(__dirname, 'frontend/dist')));
+// Serve static built React frontend files with aggressive cache headers for maximum speed
+app.use(express.static(path.join(__dirname, 'frontend/dist'), {
+  maxAge: '1y',
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    } else {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    }
+  }
+}));
 
 // Helper: Format message text placeholders {name}, {{1}}
 function formatTemplateMessage(templateBody, recipientName = 'Valued Guest') {
