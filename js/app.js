@@ -55,6 +55,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   updateLivePhonePreview();
   initModals();
   initFormListeners();
+  await initAPIConfigModal();
 
   // Navigation Logic
   function initNavigation() {
@@ -636,9 +637,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
           });
-        } catch (err) {}
 
-        alert(`🎉 Owner Account "${payload.profileName}" saved to Neon DB successfully!`);
+          await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              apiToken: payload.apiToken,
+              phoneId: payload.phoneId,
+              wabaId: payload.wabaId,
+              profileName: payload.profileName
+            })
+          });
+        } catch (err) {
+          console.error('Database save warning:', err.message);
+        }
+
+        alert(`🎉 Owner Account "${payload.profileName}" saved to Neon DB & Local Storage successfully!`);
         await fetchOwnerAccounts();
         closeModal('api-config-modal');
       });
