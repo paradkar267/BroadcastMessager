@@ -713,21 +713,39 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (saveBtn) {
-      saveBtn.addEventListener('click', async () => {
+      saveBtn.addEventListener('click', async (e) => {
+        if (e) e.preventDefault();
+
         const isCreatingNew = (modalSwitcher && modalSwitcher.value === 'NEW') || !accountIdInput || !accountIdInput.value;
+        const profileName = profileNameInput ? profileNameInput.value.trim() : '';
+        const apiToken = tokenInput ? tokenInput.value.trim() : '';
+        const phoneId = phoneInput ? phoneInput.value.trim() : '';
+        const wabaId = wabaInput ? wabaInput.value.trim() : '';
+
+        if (!profileName) {
+          alert('Please enter an Account / Owner Profile Name (e.g. Miraya Store)!');
+          if (profileNameInput) profileNameInput.focus();
+          return;
+        }
+
+        if (!phoneId) {
+          alert('Please enter Phone Number ID!');
+          if (phoneInput) phoneInput.focus();
+          return;
+        }
+
         const payload = {
           id: isCreatingNew ? '' : accountIdInput.value,
-          profileName: profileNameInput.value.trim(),
-          apiToken: tokenInput.value.trim(),
-          phoneId: phoneInput.value.trim(),
-          wabaId: wabaInput ? wabaInput.value.trim() : '',
+          profileName: profileName,
+          apiToken: apiToken,
+          phoneId: phoneId,
+          wabaId: wabaId,
           isDefault: true
         };
 
-        if (!payload.profileName || !payload.apiToken || !payload.phoneId) {
-          alert('Please fill in Account Name, API Access Token, and Phone Number ID!');
-          return;
-        }
+        const originalBtnHtml = saveBtn.innerHTML;
+        saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving to Neon DB...';
+        saveBtn.disabled = true;
 
         waService.saveConfig(payload.apiToken, payload.phoneId, payload.wabaId);
 
@@ -737,6 +755,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
           });
+
           if (res.ok) {
             const savedAcc = await res.json();
             if (savedAcc && savedAcc.id) {
@@ -758,8 +777,12 @@ document.addEventListener('DOMContentLoaded', async () => {
           console.error('Database save warning:', err.message);
         }
 
-        alert(`🎉 Owner Account "${payload.profileName}" saved to Neon DB successfully!`);
+        saveBtn.innerHTML = originalBtnHtml;
+        saveBtn.disabled = false;
+
+        alert(`🎉 Owner Account "${payload.profileName}" saved to Neon PostgreSQL Database successfully!`);
         await fetchOwnerAccounts();
+
         if (payload.id) {
           const newlySaved = savedAccounts.find(a => a.id == payload.id);
           if (newlySaved) populateFormForAccount(newlySaved);
