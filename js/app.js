@@ -94,6 +94,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  // 1. Fetch Owner Accounts first
+  await fetchOwnerAccounts();
+
+  // 2. Load Customers and Campaigns for active account
   await fetchBackendData();
 
   // Initialize UI & Event Handlers
@@ -636,7 +640,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }).join('');
   }
 
-  await fetchOwnerAccounts();
 
   // Modal Handlers
   async function initAPIConfigModal() {
