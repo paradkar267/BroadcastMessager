@@ -11,10 +11,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   const navButtons = document.querySelectorAll('.nav-btn');
   const tabPanes = document.querySelectorAll('.tab-pane');
 
+  // Helper: Get currently selected owner account_id
+  function getActiveAccountId() {
+    const sel = document.getElementById('sender-account-select')?.value;
+    if (sel && sel !== 'DEFAULT') return sel;
+    const activeAcc = savedAccounts.find(a => a.is_default);
+    return activeAcc ? activeAcc.id : 1;
+  }
+
   // Load Data from Backend API (Neon PostgreSQL)
-  async function fetchBackendData() {
+  async function fetchBackendData(targetAccId = null) {
     try {
-      const custRes = await fetch('/api/customers');
+      const accId = targetAccId || getActiveAccountId();
+      const custRes = await fetch(`/api/customers?account_id=${accId}`);
       if (custRes.ok) {
         const dbCusts = await custRes.json();
         if (Array.isArray(dbCusts)) customers = dbCusts;
@@ -373,6 +382,54 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
     }
 
+    // Sender Owner Account Switcher Listener
+    const senderSelect = document.getElementById('sender-account-select');
+    if (senderSelect) {
+      senderSelect.addEventListener('change', async () => {
+        const accId = senderSelect.value;
+        await fetchBackendData(accId);
+        renderCustomerTable(customers);
+        renderOverviewMetrics();
+      });
+    }
+
+    // Save New Customer Button Listener
+    const saveCustBtn = document.getElementById('save-new-customer-btn');
+    if (saveCustBtn) {
+      saveCustBtn.addEventListener('click', async () => {
+        const name = document.getElementById('new-cust-name')?.value.trim();
+        const phone = document.getElementById('new-cust-phone')?.value.trim();
+        const tag = document.getElementById('new-cust-tag')?.value || 'Customer';
+        const accId = getActiveAccountId();
+
+        if (!name || !phone) {
+          alert('Please enter Customer Name and Phone Number!');
+          return;
+        }
+
+        try {
+          const res = await fetch('/api/customers', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ account_id: accId, name, phone, tag })
+          });
+          if (res.ok) {
+            const savedCust = await res.json();
+            customers.unshift(savedCust);
+          } else {
+            customers.unshift({ id: Date.now(), name, phone, tag });
+          }
+        } catch (e) {
+          customers.unshift({ id: Date.now(), name, phone, tag });
+        }
+
+        renderCustomerTable(customers);
+        renderOverviewMetrics();
+        closeModal('add-customer-modal');
+        alert(`🎉 Customer "${name}" saved to Owner Directory successfully!`);
+      });
+    }
+
     // Campaign Dispatch Form Trigger
     const campaignForm = document.getElementById('launch-campaign-form');
     if (campaignForm) {
@@ -383,6 +440,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const isPasteSource = document.getElementById('source-paste-radio')?.checked;
         const customMessage = document.getElementById('custom-message-content')?.value || selectedTemplate.body;
         const posterUrl = document.getElementById('poster-url-input')?.value || '';
+        const accId = getActiveAccountId();
 
         let targetRecipients = [];
 
@@ -405,10 +463,19 @@ document.addEventListener('DOMContentLoaded', async () => {
               id: `RAW-${idx + 1}`,
               name: name,
               phone: phone.startsWith('+') ? phone : `+91 ${phone}`,
-              city: 'India',
               tag: 'Broadcast Recipient'
             };
           });
+
+          // Auto-save pasted contacts to Owner's Customer Directory in Neon DB!
+          try {
+            await fetch('/api/customers/import', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ account_id: accId, customers: targetRecipients })
+            });
+            await fetchBackendData(accId);
+          } catch (err) {}
         } else {
           const segment = document.getElementById('campaign-segment-select').value;
           if (segment === 'ALL') {

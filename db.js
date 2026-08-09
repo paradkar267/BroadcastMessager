@@ -15,15 +15,21 @@ async function initDB() {
   try {
     await client.query('BEGIN');
 
-    // 1. Customers Table
+    // 1. Customers Table (Per-Owner Isolated)
     await client.query(`
       CREATE TABLE IF NOT EXISTS customers (
         id SERIAL PRIMARY KEY,
+        account_id INT DEFAULT 1,
         name VARCHAR(255) NOT NULL,
-        phone VARCHAR(50) NOT NULL UNIQUE,
+        phone VARCHAR(50) NOT NULL,
         tag VARCHAR(100) DEFAULT 'Customer',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+    `);
+
+    // Ensure account_id column exists for existing tables
+    await client.query(`
+      ALTER TABLE customers ADD COLUMN IF NOT EXISTS account_id INT DEFAULT 1;
     `);
 
     // 2. Campaigns Table

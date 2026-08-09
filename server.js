@@ -157,10 +157,16 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// 2. Customers Endpoints
+// 2. Customers Endpoints (Per-Owner Account Isolated)
 app.get('/api/customers', async (req, res) => {
+  const { account_id } = req.query;
   try {
-    const result = await pool.query('SELECT * FROM customers ORDER BY id DESC');
+    let result;
+    if (account_id) {
+      result = await pool.query('SELECT * FROM customers WHERE account_id = $1 ORDER BY id DESC', [account_id]);
+    } else {
+      result = await pool.query('SELECT * FROM customers ORDER BY id DESC');
+    }
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -168,14 +174,24 @@ app.get('/api/customers', async (req, res) => {
 });
 
 app.post('/api/customers', async (req, res) => {
-  const { name, phone, tag } = req.body;
+  const { name, phone, tag, account_id } = req.body;
   if (!name || !phone) return res.status(400).json({ error: 'Name and Phone are required' });
 
+  const accId = account_id || 1;
   try {
-    const result = await pool.query(
-      'INSERT INTO customers (name, phone, tag) VALUES ($1, $2, $3) RETURNING *',
-      [name, phone, tag || 'Customer']
-    );
+    const check = await pool.query('SELECT * FROM customers WHERE account_id = $1 AND phone = $2', [accId, phone]);
+    let result;
+    if (check.rows.length > 0) {
+      result = await pool.query(
+        'UPDATE customers SET name = $1, tag = $2 WHERE id = $3 RETURNING *',
+        [name, tag || 'Customer', check.rows[0].id]
+      );
+    } else {
+      result = await pool.query(
+        'INSERT INTO customers (account_id, name, phone, tag) VALUES ($1, $2, $3, $4) RETURNING *',
+        [accId, name, phone, tag || 'Customer']
+      );
+    }
     res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -183,22 +199,27 @@ app.post('/api/customers', async (req, res) => {
 });
 
 app.post('/api/customers/import', async (req, res) => {
-  const { customers } = req.body;
+  const { customers, account_id } = req.body;
   if (!Array.isArray(customers) || customers.length === 0) {
     return res.status(400).json({ error: 'Customers array required' });
   }
 
+  const accId = account_id || 1;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     let imported = 0;
     for (const c of customers) {
       if (c.name && c.phone) {
-        await client.query(`
-          INSERT INTO customers (name, phone, tag)
-          VALUES ($1, $2, $3)
-          ON CONFLICT (phone) DO UPDATE SET name = EXCLUDED.name, tag = EXCLUDED.tag;
-        `, [c.name, c.phone, c.tag || 'Customer']);
+        const check = await client.query('SELECT id FROM customers WHERE account_id = $1 AND phone = $2', [accId, c.phone]);
+        if (check.rows.length > 0) {
+          await client.query('UPDATE customers SET name = $1, tag = $2 WHERE id = $3', [c.name, c.tag || 'Customer', check.rows[0].id]);
+        } else {
+          await client.query(
+            'INSERT INTO customers (account_id, name, phone, tag) VALUES ($1, $2, $3, $4)',
+            [accId, c.name, c.phone, c.tag || 'Customer']
+          );
+        }
         imported++;
       }
     }

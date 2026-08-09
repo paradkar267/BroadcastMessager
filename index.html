@@ -533,17 +533,7 @@ Team Miraya</textarea>
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" data-close-modal="add-customer-modal">Cancel</button>
-        <button class="btn btn-primary" onclick="
-          const name = document.getElementById('new-cust-name').value;
-          const phone = document.getElementById('new-cust-phone').value;
-          const tag = document.getElementById('new-cust-tag').value;
-          if(name && phone){
-            const customers = JSON.parse(localStorage.getItem('miraya_customers')) || [];
-            customers.unshift({ id: 'CUST-' + Math.floor(1000 + Math.random()*9000), name, phone, tag });
-            localStorage.setItem('miraya_customers', JSON.stringify(customers));
-            location.reload();
-          }
-        ">Save Customer</button>
+        <button class="btn btn-primary" id="save-new-customer-btn">Save Customer</button>
       </div>
     </div>
   </div>
