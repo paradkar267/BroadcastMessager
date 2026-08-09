@@ -1,16 +1,50 @@
 // Broadcast Miraya Main Application Controller
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   // App State Initialization
   let customers = JSON.parse(localStorage.getItem('miraya_customers')) || INITIAL_CUSTOMERS;
   let campaigns = JSON.parse(localStorage.getItem('miraya_campaigns')) || INITIAL_CAMPAIGNS;
   let templates = TEMPLATES;
   let selectedTemplate = templates[0];
-  let currentCampaignLogs = [];
 
   // DOM Elements
   const navButtons = document.querySelectorAll('.nav-btn');
   const tabPanes = document.querySelectorAll('.tab-pane');
+
+  // Load Data from Backend API (Neon PostgreSQL)
+  async function fetchBackendData() {
+    try {
+      const custRes = await fetch('/api/customers');
+      if (custRes.ok) {
+        const dbCusts = await custRes.json();
+        if (Array.isArray(dbCusts)) customers = dbCusts;
+      }
+
+      const campRes = await fetch('/api/campaigns');
+      if (campRes.ok) {
+        const dbCamps = await campRes.json();
+        if (Array.isArray(dbCamps)) {
+          campaigns = dbCamps.map(c => ({
+            id: c.id,
+            name: c.name,
+            templateName: c.template_name,
+            targetSegment: c.target_segment,
+            totalRecipients: c.total_recipients,
+            sent: c.sent_count,
+            delivered: c.delivered_count,
+            read: c.read_count,
+            failed: c.failed_count,
+            createdAt: new Date(c.created_at).toLocaleString(),
+            status: c.status
+          }));
+        }
+      }
+    } catch (e) {
+      console.log('Running in local standalone mode:', e.message);
+    }
+  }
+
+  await fetchBackendData();
 
   // Initialize UI & Event Handlers
   initNavigation();
@@ -25,7 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Navigation Logic
   function initNavigation() {
     navButtons.forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         const targetTab = btn.getAttribute('data-tab');
         navButtons.forEach(b => b.classList.remove('active'));
         tabPanes.forEach(p => p.classList.remove('active'));
@@ -34,9 +68,14 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById(targetTab).classList.add('active');
 
         if (targetTab === 'dashboard') {
+          await fetchBackendData();
           renderOverviewMetrics();
         } else if (targetTab === 'campaigns') {
+          await fetchBackendData();
           renderCampaignHistory();
+        } else if (targetTab === 'customers') {
+          await fetchBackendData();
+          renderCustomerTable(customers);
         }
       });
     });
@@ -447,28 +486,47 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Modal Handlers
-  initAPIConfigModal();
-
-  function initAPIConfigModal() {
+  async function initAPIConfigModal() {
     const tokenInput = document.getElementById('wa-api-token-input');
     const phoneInput = document.getElementById('wa-phone-id-input');
     const wabaInput = document.getElementById('wa-waba-id-input');
     const saveBtn = document.getElementById('save-api-config-btn');
 
-    if (tokenInput && phoneInput) {
-      tokenInput.value = waService.apiToken;
-      phoneInput.value = waService.phoneId;
-      if (wabaInput) wabaInput.value = waService.wabaId;
+    try {
+      const res = await fetch('/api/settings');
+      if (res.ok) {
+        const creds = await res.json();
+        if (tokenInput) tokenInput.value = creds.apiToken || '';
+        if (phoneInput) phoneInput.value = creds.phoneId || '';
+        if (wabaInput) wabaInput.value = creds.wabaId || '';
+      }
+    } catch (e) {
+      if (tokenInput && phoneInput) {
+        tokenInput.value = waService.apiToken;
+        phoneInput.value = waService.phoneId;
+        if (wabaInput) wabaInput.value = waService.wabaId;
+      }
     }
 
     if (saveBtn) {
-      saveBtn.addEventListener('click', () => {
-        waService.saveConfig(
-          tokenInput.value.trim(),
-          phoneInput.value.trim(),
-          wabaInput ? wabaInput.value.trim() : ''
-        );
-        alert('Meta WhatsApp API Credentials saved successfully!');
+      saveBtn.addEventListener('click', async () => {
+        const payload = {
+          apiToken: tokenInput.value.trim(),
+          phoneId: phoneInput.value.trim(),
+          wabaId: wabaInput ? wabaInput.value.trim() : ''
+        };
+
+        waService.saveConfig(payload.apiToken, payload.phoneId, payload.wabaId);
+
+        try {
+          await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+        } catch (err) {}
+
+        alert('Meta WhatsApp API Credentials saved successfully to Neon DB!');
         closeModal('api-config-modal');
       });
     }
@@ -500,30 +558,44 @@ document.addEventListener('DOMContentLoaded', () => {
     if (modal) modal.classList.remove('active');
   }
 
-  function showCampaignLogsModal(campaignId) {
+  async function showCampaignLogsModal(campaignId) {
     const campaign = campaigns.find(c => c.id === campaignId);
-    if (!campaign) return;
-
     const modalTitle = document.getElementById('logs-modal-title');
     const logsContainer = document.getElementById('campaign-logs-table-body');
     if (!modalTitle || !logsContainer) return;
 
-    modalTitle.innerText = `Delivery Log: ${campaign.name} (${campaign.id})`;
+    modalTitle.innerText = `Delivery Log: ${campaign ? campaign.name : campaignId} (${campaignId})`;
+    logsContainer.innerHTML = `<tr><td colspan="4" style="text-align:center;">Loading logs from Neon Database...</td></tr>`;
+    openModal('campaign-logs-modal');
 
-    const logs = campaign.logs || [];
+    let logs = [];
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}/logs`);
+      if (res.ok) {
+        const dbLogs = await res.json();
+        logs = dbLogs.map(l => ({
+          msgId: l.msg_id,
+          customerName: l.customer_name,
+          phone: l.phone,
+          status: l.status,
+          timestamp: new Date(l.timestamp).toLocaleTimeString()
+        }));
+      }
+    } catch (e) {
+      if (campaign) logs = campaign.logs || [];
+    }
+
     if (logs.length === 0) {
-      logsContainer.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted);">No log details stored for older campaign.</td></tr>`;
+      logsContainer.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted);">No log details stored for this campaign.</td></tr>`;
     } else {
       logsContainer.innerHTML = logs.map(l => `
         <tr>
           <td><span style="font-family:monospace; font-size:0.75rem;">${l.msgId}</span></td>
           <td><strong>${l.customerName}</strong><br><span style="font-size:0.75rem; color:var(--text-muted);">${l.phone}</span></td>
-          <td><span class="badge badge-${l.status.toLowerCase()}">${l.status}</span></td>
+          <td><span class="badge badge-${(l.status || 'sent').toLowerCase()}">${l.status}</span></td>
           <td>${l.timestamp}</td>
         </tr>
       `).join('');
     }
-
-    openModal('campaign-logs-modal');
   }
 });
