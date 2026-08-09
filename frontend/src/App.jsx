@@ -397,7 +397,12 @@ export default function App() {
 
   // Format Template helper
   const formatTemplateMessage = (bodyText, customerName) => {
-    return bodyText.replace(/{{1}}/g, customerName).replace(/{{name}}/g, customerName);
+    let name = customerName ? customerName.trim() : '';
+    // If name is blank or standard generic placeholder like 'Customer 1'
+    if (!name || /^Customer\s+\d+$/i.test(name)) {
+      name = 'Valued Guest';
+    }
+    return bodyText.replaceAll('{{1}}', name).replaceAll('{{name}}', name).replaceAll('{name}', name);
   };
 
   // Send single message HTTP call to Meta

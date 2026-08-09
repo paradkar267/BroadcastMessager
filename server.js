@@ -26,10 +26,14 @@ app.use(express.static(path.join(__dirname, 'frontend/dist')));
 // Helper: Format message text placeholders {name}, {{1}}
 function formatTemplateMessage(templateBody, recipientName = 'Valued Guest') {
   let text = templateBody || '';
-  return text.replaceAll('{{1}}', recipientName)
-             .replaceAll('{name}', recipientName)
-             .replaceAll('{NAME}', recipientName)
-             .replaceAll('{{name}}', recipientName);
+  let name = recipientName ? recipientName.trim() : '';
+  if (!name || /^Customer\s+\d+$/i.test(name)) {
+    name = 'Valued Guest';
+  }
+  return text.replaceAll('{{1}}', name)
+             .replaceAll('{name}', name)
+             .replaceAll('{NAME}', name)
+             .replaceAll('{{name}}', name);
 }
 
 // Helper: Get active Meta credentials from DB or .env
