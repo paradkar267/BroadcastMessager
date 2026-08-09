@@ -1,0 +1,529 @@
+// Broadcast Miraya Main Application Controller
+
+document.addEventListener('DOMContentLoaded', () => {
+  // App State Initialization
+  let customers = JSON.parse(localStorage.getItem('miraya_customers')) || INITIAL_CUSTOMERS;
+  let campaigns = JSON.parse(localStorage.getItem('miraya_campaigns')) || INITIAL_CAMPAIGNS;
+  let templates = TEMPLATES;
+  let selectedTemplate = templates[0];
+  let currentCampaignLogs = [];
+
+  // DOM Elements
+  const navButtons = document.querySelectorAll('.nav-btn');
+  const tabPanes = document.querySelectorAll('.tab-pane');
+
+  // Initialize UI & Event Handlers
+  initNavigation();
+  renderOverviewMetrics();
+  renderCustomerTable(customers);
+  renderTemplateList();
+  renderCampaignHistory();
+  updateLivePhonePreview();
+  initModals();
+  initFormListeners();
+
+  // Navigation Logic
+  function initNavigation() {
+    navButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const targetTab = btn.getAttribute('data-tab');
+        navButtons.forEach(b => b.classList.remove('active'));
+        tabPanes.forEach(p => p.classList.remove('active'));
+
+        btn.classList.add('active');
+        document.getElementById(targetTab).classList.add('active');
+
+        if (targetTab === 'dashboard') {
+          renderOverviewMetrics();
+        } else if (targetTab === 'campaigns') {
+          renderCampaignHistory();
+        }
+      });
+    });
+  }
+
+  // Dashboard Overview Metrics
+  function renderOverviewMetrics() {
+    const stats = AnalyticsManager.calculateOverviewStats(campaigns, customers);
+    document.getElementById('metric-total-customers').innerText = stats.totalCustomers;
+    document.getElementById('metric-active-campaigns').innerText = stats.totalCampaigns;
+    document.getElementById('metric-messages-sent').innerText = stats.totalSent.toLocaleString();
+    document.getElementById('metric-read-rate').innerText = `${stats.readRate}%`;
+
+    // Render Recent Campaign Table
+    const recentTableBody = document.getElementById('recent-campaigns-body');
+    if (recentTableBody) {
+      recentTableBody.innerHTML = campaigns.slice(-5).reverse().map(c => `
+        <tr>
+          <td><strong>${c.name}</strong><br><span style="font-size:0.75rem; color:var(--text-muted);">${c.id}</span></td>
+          <td><span class="tag">${c.targetSegment}</span></td>
+          <td>${c.totalRecipients}</td>
+          <td><span class="badge badge-read">${c.read} Read (${Math.round((c.read/c.totalRecipients)*100)}%)</span></td>
+          <td><span class="badge badge-sent">${c.status}</span></td>
+          <td><button class="btn btn-secondary btn-sm view-log-btn" data-id="${c.id}">View Logs</button></td>
+        </tr>
+      `).join('');
+
+      // Add View Logs Handlers
+      document.querySelectorAll('.view-log-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const campId = btn.getAttribute('data-id');
+          showCampaignLogsModal(campId);
+        });
+      });
+    }
+
+    AnalyticsManager.renderDeliveryDonutChart('dashboard-delivery-chart', stats.totalSent, stats.totalDelivered, stats.totalRead, stats.totalSent - stats.totalDelivered);
+  }
+
+  // Render Customer Table
+  function renderCustomerTable(customerList) {
+    const tbody = document.getElementById('customer-table-body');
+    if (!tbody) return;
+
+    if (customerList.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 2rem; color: var(--text-muted);">No customers found. Upload CSV or add new customer.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = customerList.map(c => `
+      <tr>
+        <td><input type="checkbox" class="customer-select-chk" data-id="${c.id}"></td>
+        <td><strong>${c.name}</strong><br><span style="font-size:0.75rem; color:var(--text-muted);">${c.id}</span></td>
+        <td>${c.phone}</td>
+        <td><span class="tag">${c.tag || 'Customer'}</span></td>
+        <td>
+          <button class="btn btn-secondary btn-sm delete-cust-btn" data-id="${c.id}">Delete</button>
+        </td>
+      </tr>
+    `).join('');
+
+    document.getElementById('customer-count-badge').innerText = `${customerList.length} Total Customers`;
+
+    // Customer Delete Handlers
+    document.querySelectorAll('.delete-cust-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = e.target.getAttribute('data-id');
+        customers = customers.filter(c => c.id !== id);
+        localStorage.setItem('miraya_customers', JSON.stringify(customers));
+        renderCustomerTable(customers);
+        renderOverviewMetrics();
+      });
+    });
+  }
+
+  // Render Approved Templates List
+  function renderTemplateList() {
+    const listContainer = document.getElementById('template-cards-container');
+    if (!listContainer) return;
+
+    listContainer.innerHTML = templates.map(t => `
+      <div class="card template-card ${t.id === selectedTemplate.id ? 'active-template' : ''}" data-id="${t.id}" style="margin-bottom:1rem; cursor:pointer; border:${t.id === selectedTemplate.id ? '2px solid var(--primary-wa)' : '1px solid var(--border-color)'};">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <h4 style="font-size:0.95rem; font-weight:700;">${t.title}</h4>
+          <span class="badge badge-read">${t.status}</span>
+        </div>
+        <div style="font-size:0.8rem; color:var(--text-muted); font-family:monospace; margin-bottom:8px;">Template Name: ${t.name}</div>
+        <p style="font-size:0.82rem; color:var(--text-main); white-space:pre-line; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;">${t.body}</p>
+        <div style="margin-top:10px; display:flex; gap:6px;">
+          ${t.variables.map(v => `<span class="tag" style="font-size:0.7rem;">{{${v}}}</span>`).join('')}
+        </div>
+      </div>
+    `).join('');
+
+    // Select template click listener
+    document.querySelectorAll('.template-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const tId = card.getAttribute('data-id');
+        selectedTemplate = templates.find(t => t.id === tId);
+        renderTemplateList();
+        renderVariableInputFields();
+        updateLivePhonePreview();
+      });
+    });
+
+    renderVariableInputFields();
+  }
+
+  // Render variable inputs for current template
+  function renderVariableInputFields() {
+    const varContainer = document.getElementById('template-variables-form');
+    if (!varContainer) return;
+
+    varContainer.innerHTML = selectedTemplate.variables.map((varName, idx) => {
+      const varKey = (idx + 1).toString();
+      const defaultVal = selectedTemplate.defaultVarValues[varKey] || '';
+      return `
+        <div class="form-group">
+          <label class="form-label">Placeholder {{${varKey}}} - ${varName}</label>
+          <input type="text" class="form-control tpl-var-input" data-key="${varKey}" value="${defaultVal}">
+        </div>
+      `;
+    }).join('');
+
+    document.querySelectorAll('.tpl-var-input').forEach(input => {
+      input.addEventListener('input', updateLivePhonePreview);
+    });
+  }
+
+  // Update WhatsApp Live Mobile Mockup Preview
+  function updateLivePhonePreview() {
+    const previewContainer = document.getElementById('wa-preview-text');
+    if (!previewContainer) return;
+
+    const posterUrl = document.getElementById('poster-url-input')?.value || '';
+    const customMsgInput = document.getElementById('custom-message-content')?.value;
+
+    const rawText = customMsgInput || selectedTemplate.body;
+    const formattedText = waService.formatTemplateMessage(rawText, { '1': 'Priya Sharma', 'name': 'Priya Sharma' });
+
+    const htmlText = formattedText
+      .replace(/\*(.*?)\*/g, '<strong>$1</strong>')
+      .replace(/\n/g, '<br>');
+
+    let mediaHeaderHtml = '';
+    if (posterUrl) {
+      mediaHeaderHtml = `<img src="${posterUrl}" alt="Campaign Poster" style="width:100%; border-radius:8px; margin-bottom:8px; max-height:200px; object-fit:cover; display:block;" onerror="this.style.display='none';">`;
+    }
+
+    previewContainer.innerHTML = mediaHeaderHtml + htmlText;
+    const previewTimeEl = document.getElementById('wa-preview-time');
+    if (previewTimeEl) previewTimeEl.innerText = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  // Render Campaign History List
+  function renderCampaignHistory() {
+    const container = document.getElementById('campaign-history-body');
+    if (!container) return;
+
+    container.innerHTML = campaigns.map(c => `
+      <tr>
+        <td><strong>${c.name}</strong><br><span style="font-size:0.75rem; color:var(--text-muted);">${c.id}</span></td>
+        <td><span style="font-size:0.8rem; font-family:monospace;">${c.templateName}</span></td>
+        <td><span class="tag">${c.targetSegment}</span></td>
+        <td>${c.totalRecipients} Customers</td>
+        <td><span class="badge badge-sent">${c.sent} Sent</span></td>
+        <td><span class="badge badge-read">${c.read} Read</span></td>
+        <td><span class="badge badge-failed">${c.failed} Failed</span></td>
+        <td><button class="btn btn-secondary btn-sm view-log-btn" data-id="${c.id}">View Detailed Log</button></td>
+      </tr>
+    `).join('');
+
+    document.querySelectorAll('.view-log-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const campId = btn.getAttribute('data-id');
+        showCampaignLogsModal(campId);
+      });
+    });
+  }
+
+  // Initialize Search, Filter & Quick Broadcast Listeners
+  function initFormListeners() {
+    renderQuickLinks();
+
+    // Radio Recipient Source Toggle
+    const dbRadio = document.getElementById('source-db-radio');
+    const pasteRadio = document.getElementById('source-paste-radio');
+    const groupSegment = document.getElementById('group-segment-select');
+    const groupPaste = document.getElementById('group-paste-numbers');
+
+    if (dbRadio && pasteRadio) {
+      dbRadio.addEventListener('change', () => {
+        groupSegment.style.display = 'block';
+        groupPaste.style.display = 'none';
+      });
+      pasteRadio.addEventListener('change', () => {
+        groupSegment.style.display = 'none';
+        groupPaste.style.display = 'block';
+      });
+    }
+
+    // Search Customer Input
+    const searchInput = document.getElementById('search-customer-input');
+    if (searchInput) {
+      searchInput.addEventListener('input', (e) => {
+        const query = e.target.value.toLowerCase();
+        const filtered = customers.filter(c => 
+          c.name.toLowerCase().includes(query) || 
+          c.phone.includes(query) || 
+          c.city.toLowerCase().includes(query) || 
+          c.tag.toLowerCase().includes(query)
+        );
+        renderCustomerTable(filtered);
+      });
+    }
+
+    // Segment Filter Select
+    const filterSelect = document.getElementById('filter-segment-select');
+    if (filterSelect) {
+      filterSelect.addEventListener('change', (e) => {
+        const tag = e.target.value;
+        if (tag === 'ALL') {
+          renderCustomerTable(customers);
+        } else {
+          const filtered = customers.filter(c => c.tag === tag);
+          renderCustomerTable(filtered);
+        }
+      });
+    }
+
+    // CSV Customer Import Reader
+    const csvFileInput = document.getElementById('csv-file-input');
+    if (csvFileInput) {
+      csvFileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+          const text = evt.target.result;
+          const lines = text.split('\n');
+          const newCustomers = [];
+
+          for (let i = 1; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+            const parts = line.split(',');
+            if (parts.length >= 2) {
+              newCustomers.push({
+                id: 'CUST-' + Math.floor(1000 + Math.random() * 9000),
+                name: parts[0].trim(),
+                phone: parts[1].trim(),
+                city: parts[2] ? parts[2].trim() : 'Mumbai',
+                tag: parts[3] ? parts[3].trim() : 'General',
+                totalPurchases: 1,
+                lastVisited: new Date().toISOString().split('T')[0]
+              });
+            }
+          }
+
+          if (newCustomers.length > 0) {
+            customers = [...customers, ...newCustomers];
+            localStorage.setItem('miraya_customers', JSON.stringify(customers));
+            renderCustomerTable(customers);
+            renderOverviewMetrics();
+            renderQuickLinks();
+            alert(`Successfully imported ${newCustomers.length} customers from CSV!`);
+            closeModal('csv-import-modal');
+          }
+        };
+        reader.readAsText(file);
+      });
+    }
+
+    // Poster Image & Custom Message Listeners
+    const posterUrlInput = document.getElementById('poster-url-input');
+    if (posterUrlInput) posterUrlInput.addEventListener('input', updateLivePhonePreview);
+
+    const customMsgContent = document.getElementById('custom-message-content');
+    if (customMsgContent) customMsgContent.addEventListener('input', updateLivePhonePreview);
+
+    const posterFileInput = document.getElementById('poster-file-input');
+    if (posterFileInput) {
+      posterFileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (evt) => {
+            if (posterUrlInput) posterUrlInput.value = evt.target.result;
+            updateLivePhonePreview();
+          };
+          reader.readAsDataURL(file);
+        }
+      });
+    }
+
+    // Campaign Dispatch Form Trigger
+    const campaignForm = document.getElementById('launch-campaign-form');
+    if (campaignForm) {
+      campaignForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const campaignName = document.getElementById('campaign-name-input').value;
+        const isPasteSource = document.getElementById('source-paste-radio')?.checked;
+        const customMessage = document.getElementById('custom-message-content')?.value || selectedTemplate.body;
+        const posterUrl = document.getElementById('poster-url-input')?.value || '';
+
+        let targetRecipients = [];
+
+        if (isPasteSource) {
+          const pastedText = document.getElementById('pasted-phone-numbers').value.trim();
+          if (!pastedText) {
+            alert('Please enter at least one Name and Phone Number!');
+            return;
+          }
+          const rawLines = pastedText.split('\n').map(l => l.trim()).filter(l => l.length > 3);
+          targetRecipients = rawLines.map((line, idx) => {
+            const parts = line.split(',');
+            let name = `Customer ${idx + 1}`;
+            let phone = line;
+            if (parts.length >= 2) {
+              name = parts[0].trim();
+              phone = parts[1].trim();
+            }
+            return {
+              id: `RAW-${idx + 1}`,
+              name: name,
+              phone: phone.startsWith('+') ? phone : `+91 ${phone}`,
+              city: 'India',
+              tag: 'Broadcast Recipient'
+            };
+          });
+        } else {
+          const segment = document.getElementById('campaign-segment-select').value;
+          if (segment === 'ALL') {
+            targetRecipients = customers;
+          } else {
+            targetRecipients = customers.filter(c => c.tag === segment);
+          }
+        }
+
+        if (targetRecipients.length === 0) {
+          alert('No valid recipients found to send broadcast!');
+          return;
+        }
+
+        // Open Dispatch Modal Visualizer
+        openModal('dispatch-progress-modal');
+
+        // Dynamic template object created from form textarea
+        const activeTemplateObj = {
+          name: 'custom_broadcast_msg',
+          body: customMessage
+        };
+
+        // Run Real / Simulated Dispatch Engine
+        const campaignResult = await waService.executeBroadcastCampaign(
+          { name: campaignName, targetSegment: isPasteSource ? 'Pasted Numbers' : 'Selected Group' },
+          targetRecipients,
+          activeTemplateObj,
+          { '1': 'Customer' },
+          posterUrl,
+          (progress) => {
+            document.getElementById('dispatch-progress-fill').style.width = `${progress.percentage}%`;
+            document.getElementById('dispatch-status-text').innerText = `Sending to ${progress.lastProcessed} (${progress.current}/${progress.total})...`;
+            document.getElementById('dispatch-stat-sent').innerText = progress.sentCount;
+            document.getElementById('dispatch-stat-read').innerText = progress.readCount;
+            document.getElementById('dispatch-stat-failed').innerText = progress.failedCount;
+          }
+        );
+
+        campaigns.unshift(campaignResult);
+        localStorage.setItem('miraya_campaigns', JSON.stringify(campaigns));
+
+        setTimeout(() => {
+          closeModal('dispatch-progress-modal');
+          renderOverviewMetrics();
+          renderCampaignHistory();
+          renderQuickLinks();
+          alert(`🎉 WhatsApp Broadcast "${campaignName}" Ek Saath ${campaignResult.sent} Logo ko Bhej Diya Gaya hai!`);
+        }, 600);
+      });
+    }
+  }
+
+  // Render Direct WhatsApp Click Links for 1-Click Messaging
+  function renderQuickLinks() {
+    const container = document.getElementById('quick-links-list');
+    if (!container) return;
+
+    const sampleMsg = encodeURIComponent("✨ You’re Invited! Miraya is bringing you an exclusive new collection. We’d love to have you with us!");
+
+    container.innerHTML = customers.slice(0, 10).map(c => {
+      const cleanPhone = c.phone.replace(/[^0-9]/g, '');
+      const link = `https://wa.me/${cleanPhone}?text=${sampleMsg}`;
+      return `
+        <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-color); padding:8px 12px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div style="font-size:0.85rem; font-weight:600;">${c.name}</div>
+            <div style="font-size:0.72rem; color:var(--text-muted);">${c.phone}</div>
+          </div>
+          <a href="${link}" target="_blank" class="btn btn-primary btn-sm" style="padding:4px 10px; font-size:0.75rem; text-decoration:none;">
+            <i class="fa-brands fa-whatsapp"></i> Send Direct
+          </a>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // Modal Handlers
+  initAPIConfigModal();
+
+  function initAPIConfigModal() {
+    const tokenInput = document.getElementById('wa-api-token-input');
+    const phoneInput = document.getElementById('wa-phone-id-input');
+    const wabaInput = document.getElementById('wa-waba-id-input');
+    const saveBtn = document.getElementById('save-api-config-btn');
+
+    if (tokenInput && phoneInput) {
+      tokenInput.value = waService.apiToken;
+      phoneInput.value = waService.phoneId;
+      if (wabaInput) wabaInput.value = waService.wabaId;
+    }
+
+    if (saveBtn) {
+      saveBtn.addEventListener('click', () => {
+        waService.saveConfig(
+          tokenInput.value.trim(),
+          phoneInput.value.trim(),
+          wabaInput ? wabaInput.value.trim() : ''
+        );
+        alert('Meta WhatsApp API Credentials saved successfully!');
+        closeModal('api-config-modal');
+      });
+    }
+  }
+
+  function initModals() {
+    document.querySelectorAll('[data-open-modal]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const modalId = btn.getAttribute('data-open-modal');
+        openModal(modalId);
+      });
+    });
+
+    document.querySelectorAll('[data-close-modal]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const modalId = btn.getAttribute('data-close-modal');
+        closeModal(modalId);
+      });
+    });
+  }
+
+  function openModal(id) {
+    const modal = document.getElementById(id);
+    if (modal) modal.classList.add('active');
+  }
+
+  function closeModal(id) {
+    const modal = document.getElementById(id);
+    if (modal) modal.classList.remove('active');
+  }
+
+  function showCampaignLogsModal(campaignId) {
+    const campaign = campaigns.find(c => c.id === campaignId);
+    if (!campaign) return;
+
+    const modalTitle = document.getElementById('logs-modal-title');
+    const logsContainer = document.getElementById('campaign-logs-table-body');
+    if (!modalTitle || !logsContainer) return;
+
+    modalTitle.innerText = `Delivery Log: ${campaign.name} (${campaign.id})`;
+
+    const logs = campaign.logs || [];
+    if (logs.length === 0) {
+      logsContainer.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted);">No log details stored for older campaign.</td></tr>`;
+    } else {
+      logsContainer.innerHTML = logs.map(l => `
+        <tr>
+          <td><span style="font-family:monospace; font-size:0.75rem;">${l.msgId}</span></td>
+          <td><strong>${l.customerName}</strong><br><span style="font-size:0.75rem; color:var(--text-muted);">${l.phone}</span></td>
+          <td><span class="badge badge-${l.status.toLowerCase()}">${l.status}</span></td>
+          <td>${l.timestamp}</td>
+        </tr>
+      `).join('');
+    }
+
+    openModal('campaign-logs-modal');
+  }
+});

@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Broadcast Miraya - WhatsApp Business Platform & Campaign Manager</title>
+  
+  <!-- Modern Google Font: Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Main Stylesheet -->
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <!-- App Header -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand-section">
+        <div class="brand-icon">
+          <i class="fa-brands fa-whatsapp"></i>
+        </div>
+        <div class="brand-title">
+          <h1>Broadcast Miraya</h1>
+          <div class="brand-subtitle">WhatsApp Business Platform & Bulk Campaign Manager</div>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <div class="mode-badge" data-open-modal="api-config-modal">
+          <span class="mode-dot"></span>
+          <span>Meta WhatsApp API Settings</span>
+        </div>
+        <button class="btn btn-gold btn-sm" data-open-modal="csv-import-modal">
+          <i class="fa-solid fa-file-csv"></i> Import Customers
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Navigation Bar -->
+  <nav class="app-nav">
+    <div class="nav-container">
+      <button class="nav-btn active" data-tab="launch">
+        <i class="fa-solid fa-paper-plane"></i> Quick Message Broadcast (Ek Saath Bhejo)
+      </button>
+      <button class="nav-btn" data-tab="dashboard">
+        <i class="fa-solid fa-chart-line"></i> Dashboard Overview
+      </button>
+      <button class="nav-btn" data-tab="customers">
+        <i class="fa-solid fa-users"></i> Customer Lists
+      </button>
+      <button class="nav-btn" data-tab="templates">
+        <i class="fa-solid fa-envelope-open-text"></i> Message Templates & Preview
+      </button>
+      <button class="nav-btn" data-tab="campaigns">
+        <i class="fa-solid fa-clock-rotate-left"></i> Campaign Logs
+      </button>
+    </div>
+  </nav>
+
+  <!-- Main Content Layout -->
+  <main class="app-main">
+
+    <!-- 1. LAUNCH BROADCAST TAB (DEFAULT ACTIVE) -->
+    <div id="launch" class="tab-pane active">
+      <div class="panel-grid" style="grid-template-columns: 1fr 380px;">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <i class="fa-solid fa-paper-plane" style="color:var(--primary-wa);"></i> Bulk WhatsApp Broadcast (Sabhi ko Ek Saath Message Bhejo)
+            </div>
+            <span class="badge badge-read">WhatsApp API Engine Active</span>
+          </div>
+
+          <form id="launch-campaign-form">
+            <!-- Mode Toggle -->
+            <div class="form-group" style="background: rgba(255,255,255,0.03); padding: 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+              <label class="form-label" style="margin-bottom:0.5rem; color:var(--accent-gold);">Kise Message Bhejna Hai? (Recipients Source):</label>
+              <div style="display:flex; gap: 1rem;">
+                <label style="cursor:pointer; display:flex; align-items:center; gap:6px;">
+                  <input type="radio" name="recipientSource" value="DB" checked id="source-db-radio">
+                  <span>Saved Customer Database</span>
+                </label>
+                <label style="cursor:pointer; display:flex; align-items:center; gap:6px;">
+                  <input type="radio" name="recipientSource" value="PASTE" id="source-paste-radio">
+                  <span>Quick Paste Phone Numbers</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Audience Segment Dropdown -->
+            <div class="form-group" id="group-segment-select">
+              <label class="form-label">Select Target Customer Group</label>
+              <select id="campaign-segment-select" class="form-control">
+                <option value="ALL">All Saved Customers (Entire List)</option>
+                <option value="VIP Customer">VIP Customers Only</option>
+                <option value="Bridal Client">Bridal Clients Only</option>
+                <option value="High Spender">High Spenders Only</option>
+                <option value="Festive Shopper">Festive Shoppers</option>
+              </select>
+            </div>
+
+            <!-- Quick Paste Numbers Textarea (Hidden by default, shown when radio changed) -->
+            <div class="form-group" id="group-paste-numbers" style="display:none;">
+              <label class="form-label">Paste Name & Phone Numbers (One per line)</label>
+              <textarea id="pasted-phone-numbers" class="form-control" placeholder="Priya Sharma, 9876543210
+Ananya Verma, 9812345678
+Rhea Mehta, 9765432109" rows="5"></textarea>
+              <span style="font-size:0.75rem; color:var(--text-muted);">Format: Name, Phone Number (Example: Priya, 9876543210)</span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Campaign / Message Title</label>
+              <input type="text" id="campaign-name-input" class="form-control" value="Exclusive Collection Broadcast" required>
+            </div>
+
+            <!-- Campaign Poster Image Attachment -->
+            <div class="form-group">
+              <label class="form-label" style="display:flex; justify-content:space-between; align-items:center;">
+                <span><i class="fa-solid fa-image" style="color:var(--accent-gold);"></i> Campaign Poster / Banner Image</span>
+                <span style="font-size:0.75rem; color:var(--primary-wa);">(Attached Poster)</span>
+              </label>
+              <div style="display:flex; gap:10px;">
+                <input type="text" id="poster-url-input" class="form-control" placeholder="https://... or upload poster image" value="images/miraya_poster.png">
+                <input type="file" id="poster-file-input" accept="image/*" style="display:none;">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('poster-file-input').click();">
+                  <i class="fa-solid fa-upload"></i> Upload Poster
+                </button>
+              </div>
+              <span style="font-size:0.75rem; color:var(--text-muted); margin-top:4px; display:block;">
+                Paste image URL or upload poster file to send attached with broadcast message.
+              </span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Broadcast Message Content</label>
+              <textarea id="custom-message-content" class="form-control" rows="6" required>✨ You’re Invited!
+Miraya is bringing you an exclusive new collection.
+
+👗 New Arrivals | ✨ Exclusive Designs | 🛍️ Special Offers
+
+We’d love to have you with us!
+
+📅 Date: 15th August 2026
+📍 Location: Miraya Store, Bandra, Mumbai
+
+Team Miraya</textarea>
+            </div>
+
+            <div style="margin-top:2rem;">
+              <button type="submit" class="btn btn-primary" style="width:100%; padding:1rem; font-size:1.05rem; font-weight:700;">
+                <i class="fa-solid fa-rocket"></i> 🚀 Ek Saath Sabhi Ko Message Bhejo (Broadcast Now)
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Quick Help & Live Status -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><i class="fa-brands fa-whatsapp" style="color:var(--primary-wa);"></i> Direct WhatsApp Links</div>
+          </div>
+          <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">
+            Aap ek saath saare customers ko automatically Message Dispatch kar sakte hain, ya niche Web Direct WhatsApp click links create kar sakte hain:
+          </p>
+
+          <div id="quick-links-list" style="display:flex; flex-direction:column; gap:8px; max-height:380px; overflow-y:auto;">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. DASHBOARD TAB -->
+    <div id="dashboard" class="tab-pane">
+      <!-- Metrics Grid -->
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-icon gold"><i class="fa-solid fa-users"></i></div>
+          <div class="metric-data">
+            <div class="value" id="metric-total-customers">0</div>
+            <div class="label">Total Customers</div>
+          </div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-icon green"><i class="fa-solid fa-bullhorn"></i></div>
+          <div class="metric-data">
+            <div class="value" id="metric-active-campaigns">0</div>
+            <div class="label">Total Campaigns</div>
+          </div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-icon blue"><i class="fa-solid fa-paper-plane"></i></div>
+          <div class="metric-data">
+            <div class="value" id="metric-messages-sent">0</div>
+            <div class="label">Invitations Dispatched</div>
+          </div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-icon purple"><i class="fa-solid fa-circle-check"></i></div>
+          <div class="metric-data">
+            <div class="value" id="metric-read-rate">0%</div>
+            <div class="label">Avg WhatsApp Read Rate</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Panel Grid -->
+      <div class="panel-grid">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <i class="fa-solid fa-list-check" style="color:var(--primary-wa);"></i> Recent Broadcast Campaigns
+            </div>
+            <button class="btn btn-secondary btn-sm" data-tab="launch" onclick="document.querySelector('[data-tab=\'launch\']').click();">
+              + New Campaign
+            </button>
+          </div>
+          <div class="table-responsive">
+            <table class="custom-table">
+              <thead>
+                <tr>
+                  <th>Campaign Name</th>
+                  <th>Segment</th>
+                  <th>Recipients</th>
+                  <th>Read Rate</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="recent-campaigns-body">
+                <!-- Populated via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Delivery Breakdown Analytics Card -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <i class="fa-solid fa-pie-chart" style="color:var(--accent-gold);"></i> Delivery Analytics
+            </div>
+          </div>
+          <div id="dashboard-delivery-chart">
+            <!-- Rendered by AnalyticsManager JS -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. CUSTOMERS TAB -->
+    <div id="customers" class="tab-pane">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <i class="fa-solid fa-users-gear" style="color:var(--accent-gold);"></i> Customer Directory & Segments
+          </div>
+          <span class="badge badge-read" id="customer-count-badge">0 Customers</span>
+        </div>
+
+        <!-- Toolbar -->
+        <div class="toolbar">
+          <div class="search-box">
+            <i class="fa-solid fa-magnifying-glass search-icon"></i>
+            <input type="text" id="search-customer-input" class="form-control" placeholder="Search by name, phone, city, or tag...">
+          </div>
+
+          <div style="display:flex; gap:10px;">
+            <select id="filter-segment-select" class="form-control" style="width: 200px;">
+              <option value="ALL">All Segments</option>
+              <option value="VIP Customer">VIP Customers</option>
+              <option value="Bridal Client">Bridal Clients</option>
+              <option value="High Spender">High Spenders</option>
+              <option value="Festive Shopper">Festive Shoppers</option>
+            </select>
+
+            <button class="btn btn-primary btn-sm" data-open-modal="add-customer-modal">
+              <i class="fa-solid fa-user-plus"></i> Add Customer
+            </button>
+          </div>
+        </div>
+
+        <!-- Customer Table -->
+        <div class="table-responsive">
+          <table class="custom-table">
+            <thead>
+              <tr>
+                <th style="width:40px;"><input type="checkbox" id="select-all-customers"></th>
+                <th>Customer Name</th>
+                <th>Phone Number</th>
+                <th>Segment Tag</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="customer-table-body">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. TEMPLATES & PREVIEW TAB -->
+    <div id="templates" class="tab-pane">
+      <div class="panel-grid" style="grid-template-columns: 340px 1fr 340px;">
+        <!-- Left: Approved Template Selector -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><i class="fa-solid fa-file-circle-check"></i> Meta Approved Templates</div>
+          </div>
+          <div id="template-cards-container">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+
+        <!-- Middle: Template Parameter Customizer -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><i class="fa-solid fa-sliders"></i> Template Variables & Customization</div>
+          </div>
+
+          <form id="template-variables-form">
+            <!-- Variable Input Fields generated by JS -->
+          </form>
+
+          <div style="margin-top:1.5rem; padding-top:1rem; border-top:1px solid var(--border-color);">
+            <button class="btn btn-primary" onclick="document.querySelector('[data-tab=\'launch\']').click();">
+              Proceed to Launch Campaign <i class="fa-solid fa-arrow-right"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Right: WhatsApp Live Mobile Screen Mockup -->
+        <div class="card" style="text-align:center;">
+          <div class="card-header">
+            <div class="card-title" style="justify-content:center;">
+              <i class="fa-brands fa-whatsapp" style="color:var(--primary-wa);"></i> Live WhatsApp Preview
+            </div>
+          </div>
+
+          <div class="phone-mockup">
+            <div class="phone-notch"></div>
+            <div class="wa-screen-header">
+              <div class="wa-avatar">M</div>
+              <div class="wa-contact-info">
+                <div class="name">Team Miraya</div>
+                <div class="status">Official Business Account</div>
+              </div>
+            </div>
+
+            <div class="wa-chat-body">
+              <div class="wa-bubble">
+                <div id="wa-preview-text">
+                  <!-- Live formatted WhatsApp message preview rendered by JS -->
+                </div>
+                <div class="wa-bubble-time">
+                  <span id="wa-preview-time">10:42 AM</span>
+                  <span class="wa-ticks"><i class="fa-solid fa-check-double"></i></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. LAUNCH CAMPAIGN TAB -->
+    <div id="launch" class="tab-pane">
+      <div class="panel-grid" style="grid-template-columns: 1fr 340px;">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <i class="fa-solid fa-paper-plane" style="color:var(--primary-wa);"></i> Setup Bulk Broadcast Campaign
+            </div>
+          </div>
+
+          <form id="launch-campaign-form">
+            <div class="form-group">
+              <label class="form-label">Campaign Name</label>
+              <input type="text" id="campaign-name-input" class="form-control" value="Exclusive Collection Launch 2026" required>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Select Target Audience Segment</label>
+              <select id="campaign-segment-select" class="form-control">
+                <option value="ALL">All Customers (Entire Database)</option>
+                <option value="VIP Customer">VIP Customers Only</option>
+                <option value="Bridal Client">Bridal Clients Only</option>
+                <option value="High Spender">High Spenders Only</option>
+                <option value="Festive Shopper">Festive Shoppers</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Selected Approved Template</label>
+              <input type="text" class="form-control" value="miraya_new_collection_invitation (Exclusive Collection Invitation)" readonly>
+            </div>
+
+            <div style="margin-top:2rem;">
+              <button type="submit" class="btn btn-primary" style="width:100%; padding:0.9rem;">
+                <i class="fa-solid fa-rocket"></i> Dispatch WhatsApp Broadcast Now
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><i class="fa-solid fa-shield-halved"></i> Meta Compliance Check</div>
+          </div>
+          <div style="font-size:0.85rem; color:var(--text-muted); display:flex; flex-direction:column; gap:12px;">
+            <div style="display:flex; gap:8px;">
+              <i class="fa-solid fa-check" style="color:var(--primary-wa); margin-top:2px;"></i>
+              <span>Template status verified: <strong>APPROVED</strong> by Meta.</span>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <i class="fa-solid fa-check" style="color:var(--primary-wa); margin-top:2px;"></i>
+              <span>Opt-in customer list verified.</span>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <i class="fa-solid fa-check" style="color:var(--primary-wa); margin-top:2px;"></i>
+              <span>Automated rate limiting enabled (80 msg/sec).</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. CAMPAIGN HISTORY TAB -->
+    <div id="campaigns" class="tab-pane">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <i class="fa-solid fa-clock-rotate-left" style="color:var(--accent-gold);"></i> Campaign Dispatch History & Delivery Logs
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="custom-table">
+            <thead>
+              <tr>
+                <th>Campaign Name</th>
+                <th>Template Name</th>
+                <th>Target Segment</th>
+                <th>Recipients</th>
+                <th>Sent</th>
+                <th>Read</th>
+                <th>Failed</th>
+                <th>Log Actions</th>
+              </tr>
+            </thead>
+            <tbody id="campaign-history-body">
+              <!-- Rendered by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- MODALS -->
+
+  <!-- 1. CSV Import Modal -->
+  <div id="csv-import-modal" class="modal-overlay">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-file-csv" style="color:var(--accent-gold);"></i> Bulk Import Customers (CSV)</h3>
+        <button class="close-btn" data-close-modal="csv-import-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:0.88rem; color:var(--text-muted); margin-bottom:1rem;">
+          Upload a CSV file containing your customer list. Format: <code>Name, Phone, City, Tag</code>.
+        </p>
+        <div class="form-group">
+          <input type="file" id="csv-file-input" accept=".csv" class="form-control">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-close-modal="csv-import-modal">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Add Single Customer Modal -->
+  <div id="add-customer-modal" class="modal-overlay">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-user-plus"></i> Add New Customer</h3>
+        <button class="close-btn" data-close-modal="add-customer-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="add-customer-form">
+          <div class="form-group">
+            <label class="form-label">Full Name</label>
+            <input type="text" id="new-cust-name" class="form-control" required placeholder="e.g. Pooja Hegde">
+          </div>
+          <div class="form-group">
+            <label class="form-label">WhatsApp Phone Number</label>
+            <input type="text" id="new-cust-phone" class="form-control" required placeholder="+91 98765 43210">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Segment Tag</label>
+            <select id="new-cust-tag" class="form-control">
+              <option value="VIP Customer">VIP Customer</option>
+              <option value="Bridal Client">Bridal Client</option>
+              <option value="High Spender">High Spender</option>
+              <option value="Festive Shopper">Festive Shopper</option>
+            </select>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-close-modal="add-customer-modal">Cancel</button>
+        <button class="btn btn-primary" onclick="
+          const name = document.getElementById('new-cust-name').value;
+          const phone = document.getElementById('new-cust-phone').value;
+          const tag = document.getElementById('new-cust-tag').value;
+          if(name && phone){
+            const customers = JSON.parse(localStorage.getItem('miraya_customers')) || [];
+            customers.unshift({ id: 'CUST-' + Math.floor(1000 + Math.random()*9000), name, phone, tag });
+            localStorage.setItem('miraya_customers', JSON.stringify(customers));
+            location.reload();
+          }
+        ">Save Customer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Dispatch Progress Visualizer Modal -->
+  <div id="dispatch-progress-modal" class="modal-overlay">
+    <div class="modal-container" style="max-width:480px; text-align:center;">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-paper-plane" style="color:var(--primary-wa);"></i> Dispatching Broadcast...</h3>
+      </div>
+      <div class="modal-body" style="padding:2rem 1.5rem;">
+        <i class="fa-brands fa-whatsapp fa-3x" style="color:var(--primary-wa); margin-bottom:1rem; animation: pulse 1.5s infinite;"></i>
+        <div id="dispatch-status-text" style="font-weight:600; font-size:0.95rem; margin-bottom:0.5rem;">Initializing queue...</div>
+        
+        <div class="progress-bar-container">
+          <div id="dispatch-progress-fill" class="progress-bar-fill"></div>
+        </div>
+
+        <div style="display:flex; justify-content:space-around; margin-top:1.5rem; font-size:0.85rem;">
+          <div>Sent: <strong id="dispatch-stat-sent">0</strong></div>
+          <div>Read: <strong id="dispatch-stat-read" style="color:var(--primary-wa);">0</strong></div>
+          <div>Failed: <strong id="dispatch-stat-failed" style="color:var(--status-failed);">0</strong></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. Detailed Campaign Logs Modal -->
+  <div id="campaign-logs-modal" class="modal-overlay">
+    <div class="modal-container" style="max-width:760px;">
+      <div class="modal-header">
+        <h3 id="logs-modal-title">Delivery Detailed Log</h3>
+        <button class="close-btn" data-close-modal="campaign-logs-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="table-responsive">
+          <table class="custom-table">
+            <thead>
+              <tr>
+                <th>Message ID</th>
+                <th>Recipient</th>
+                <th>Status</th>
+                <th>Timestamp</th>
+              </tr>
+            </thead>
+            <tbody id="campaign-logs-table-body">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-close-modal="campaign-logs-modal">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. Meta WhatsApp API Config Modal -->
+  <div id="api-config-modal" class="modal-overlay">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3><i class="fa-brands fa-whatsapp" style="color:var(--primary-wa);"></i> Meta WhatsApp Cloud API Settings</h3>
+        <button class="close-btn" data-close-modal="api-config-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Meta Cloud API Access Token</label>
+          <input type="password" id="wa-api-token-input" class="form-control" placeholder="EAAG..." value="">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Phone Number ID</label>
+          <input type="text" id="wa-phone-id-input" class="form-control" placeholder="e.g. 10987654321" value="">
+        </div>
+        <div class="form-group">
+          <label class="form-label">WhatsApp Business Account (WABA) ID</label>
+          <input type="text" id="wa-waba-id-input" class="form-control" placeholder="e.g. 9876543210" value="">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-close-modal="api-config-modal">Close</button>
+        <button class="btn btn-primary" id="save-api-config-btn">Save API Credentials</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JS Dependencies -->
+  <script src="js/data.js"></script>
+  <script src="js/whatsapp.js"></script>
+  <script src="js/analytics.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
