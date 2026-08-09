@@ -70,11 +70,8 @@ async function getMetaCredentials(accountId = null) {
 async function uploadMediaToMeta(fileBuffer, mimeType, phoneId, apiToken) {
   if (!phoneId || !apiToken) return null;
   try {
-    const Blob = (await import('node-fetch')).Blob || globalThis.Blob;
-    const FormData = (await import('node-fetch')).FormData || globalThis.FormData;
-    
-    const formData = new FormData();
     const blob = new Blob([fileBuffer], { type: mimeType });
+    const formData = new FormData();
     formData.append('messaging_product', 'whatsapp');
     formData.append('file', blob, 'poster.jpg');
     formData.append('type', mimeType);

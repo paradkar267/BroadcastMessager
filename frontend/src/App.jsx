@@ -65,6 +65,46 @@ const TEMPLATES = [
     status: 'APPROVED',
     body: 'Namaste {{1}}!\n\nShubh Vivah Season ke liye Miraya Bridal Showcase ab open hai! 🌸\n\nExquisite wedding lehengas, bridal sarees, and designer sherwanis ka exclusive collection preview karein. Book a personal stylist session today.\n\n📍 Location: Miraya Bridal Studio, Main Road.',
     variables: ['name']
+  },
+  {
+    id: 'miraya_diwali_trunk',
+    title: '✨ Diwali Exclusive Luxury Trunk Show',
+    name: 'miraya_diwali_trunk',
+    status: 'APPROVED',
+    body: 'Namaste {{1}}!\n\n✨ Celebrate the festival of lights with royal fashion! ✨\n\nMiraya cordially invites you to our Exclusive Luxury Trunk Show. Discover premium heavy embroidery suits, designer sarees, and handwoven luxury kurtis.\n\n🎁 Show this VIP Invitation message to claim a Complimentary Festive Silk Scarf on your purchase!\n📍 Venue: Miraya Boutique, Suite 101.',
+    variables: ['name']
+  },
+  {
+    id: 'miraya_weekend_extravaganza',
+    title: '🛍️ Weekend Fashion Extravaganza',
+    name: 'miraya_weekend_extravaganza',
+    status: 'APPROVED',
+    body: 'Dear {{1}},\n\nGet ready for a fashionable weekend! 🛍️✨\n\nMiraya is hosting a Weekend Fashion Extravaganza with a Live DJ, Styling Stations, and a preview of our Autumn Collection.\n\n🔥 Offer: Buy 2 Get 1 FREE on all premium outfits!\n📅 Time: Fri-Sun, 10 AM to 9 PM\n📍 Location: Miraya Main Outlet.',
+    variables: ['name']
+  },
+  {
+    id: 'miraya_anniversary_gift',
+    title: '💎 Anniversary / Birthday Month Coupon',
+    name: 'miraya_anniversary_gift',
+    status: 'APPROVED',
+    body: 'Dear {{1}},\n\nHappy Special Month! 🎉🎂\n\nTo make your celebrations extra beautiful, Miraya is gifting you an exclusive ₹1,000 Gift Voucher!\n\nUse Code: CELEBRATE1000 at checkout on any designer kurti, suit, or saree.\n📍 Redeemable at: Miraya Store & Online Hub.',
+    variables: ['name']
+  },
+  {
+    id: 'miraya_sunday_brunch',
+    title: '🎉 Sunday Store Brunch & Style Consultation',
+    name: 'miraya_sunday_brunch',
+    status: 'APPROVED',
+    body: 'Namaste {{1}}!\n\nSpend your Sunday morning with high fashion and delightful treats! 🥂🥐\n\nJoin us for the Sunday Store Brunch at Miraya. Get a complimentary 1-on-1 style consultation from our master designer to find your perfect fit.\n\n📅 Date: This Sunday, 11 AM - 3 PM\n📍 Location: Miraya Design Studio.',
+    variables: ['name']
+  },
+  {
+    id: 'miraya_saree_festival',
+    title: '🌸 Festive Saree & Kurti Festival',
+    name: 'miraya_saree_festival',
+    status: 'APPROVED',
+    body: 'Hello {{1}}!\n\nThe wait is over! The grand Saree & Kurti Festival is LIVE at Miraya! 🌸💃\n\nExplore over 500+ new patterns of Banarasi, Kanjeevaram, Organza Sarees, and Lucknowi Chikan Kurtis at special festival pricing.\n\n🎁 Flat 25% Off on all festival collections today!\n📍 Venue: Miraya Fashion Lounge.',
+    variables: ['name']
   }
 ];
 
