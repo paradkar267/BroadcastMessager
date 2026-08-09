@@ -294,6 +294,67 @@ app.post('/api/upload-media', upload.single('poster'), async (req, res) => {
     filename: req.file.originalname
   });
 });
+// Helper: Run WhatsApp Campaign loop in background
+async function runBackgroundBroadcast(campaignId, accId, name, targetSegment, recipients, message, posterUrl) {
+  console.log(`📡 Background Broadcast "${name}" (${campaignId}) started for ${recipients.length} recipients...`);
+  const creds = await getMetaCredentials(accId);
+  let metaMediaId = null;
+
+  // 1. Upload Base64 poster if present
+  if (posterUrl && posterUrl.startsWith('data:image')) {
+    try {
+      const base64Data = posterUrl.split(',')[1];
+      const buffer = Buffer.from(base64Data, 'base64');
+      const mime = posterUrl.match(/:(.*?);/)[1] || 'image/jpeg';
+      metaMediaId = await uploadMediaToMeta(buffer, mime, creds.phoneId, creds.apiToken);
+    } catch (e) {
+      console.error('Base64 upload error:', e);
+    }
+  }
+
+  let sent = 0;
+  let failed = 0;
+
+  for (const c of recipients) {
+    const formattedMessage = formatTemplateMessage(message, c.name);
+    const result = await sendSingleWhatsAppMessage(c.phone, formattedMessage, posterUrl, metaMediaId, creds.phoneId, creds.apiToken);
+
+    if (result.success) {
+      sent++;
+    } else {
+      failed++;
+    }
+
+    try {
+      // Record log in DB
+      await pool.query(`
+        INSERT INTO campaign_logs (campaign_id, msg_id, customer_name, phone, status, message_text, error_details)
+        VALUES ($1, $2, $3, $4, $5, $6, $7);
+      `, [campaignId, result.messageId || ('ERR.' + Math.random().toString(36).substring(2, 8)), c.name, c.phone, result.success ? 'SENT' : 'FAILED', formattedMessage, result.error || null]);
+
+      // Update campaign metrics in real-time
+      await pool.query(`
+        UPDATE campaigns
+        SET sent_count = $1, delivered_count = $2, read_count = $3, failed_count = $4
+        WHERE id = $5;
+      `, [sent, sent, sent, failed, campaignId]);
+    } catch (dbErr) {
+      console.error('DB Logging error in loop:', dbErr);
+    }
+
+    // Standard throttle spacing
+    await new Promise(r => setTimeout(r, 100));
+  }
+
+  // Update final status to COMPLETED
+  try {
+    await pool.query(`UPDATE campaigns SET status = 'COMPLETED' WHERE id = $1;`, [campaignId]);
+    console.log(`✅ Background Broadcast "${name}" (${campaignId}) completed successfully!`);
+  } catch (err) {
+    console.error('Failed to complete campaign status:', err);
+  }
+}
+
 // 5. Execute WhatsApp Broadcast Endpoint
 app.post('/api/broadcast', async (req, res) => {
   const { name, targetSegment, recipients, message, posterUrl, account_id, logOnly, campaignId, sentCount, deliveredCount, readCount, failedCount, logs: frontendLogs } = req.body;
@@ -305,91 +366,27 @@ app.post('/api/broadcast', async (req, res) => {
   const finalCampaignId = campaignId || ('CMP-' + Date.now().toString().slice(-6));
   const accId = account_id || 1;
 
-  let finalSent = 0;
-  let finalDelivered = 0;
-  let finalRead = 0;
-  let finalFailed = 0;
-  let finalLogs = [];
-
-  if (logOnly) {
-    finalSent = sentCount || 0;
-    finalDelivered = deliveredCount || 0;
-    finalRead = readCount || 0;
-    finalFailed = failedCount || 0;
-    finalLogs = frontendLogs || [];
-  } else {
-    const creds = await getMetaCredentials(accId);
-    let metaMediaId = null;
-    if (posterUrl && posterUrl.startsWith('data:image')) {
-      try {
-        const base64Data = posterUrl.split(',')[1];
-        const buffer = Buffer.from(base64Data, 'base64');
-        const mime = posterUrl.match(/:(.*?);/)[1] || 'image/jpeg';
-        metaMediaId = await uploadMediaToMeta(buffer, mime, creds.phoneId, creds.apiToken);
-      } catch (e) {
-        console.error('Base64 upload error:', e);
-      }
-    }
-
-    for (const c of recipients) {
-      const formattedMessage = formatTemplateMessage(message, c.name);
-      const result = await sendSingleWhatsAppMessage(c.phone, formattedMessage, posterUrl, metaMediaId, creds.phoneId, creds.apiToken);
-
-      if (result.success) {
-        finalSent++;
-        finalDelivered++;
-        finalRead++;
-      } else {
-        finalFailed++;
-      }
-
-      finalLogs.push({
-        campaignId: finalCampaignId,
-        msgId: result.messageId || ('ERR.' + Math.random().toString(36).substring(2, 8)),
-        customerName: c.name,
-        phone: c.phone,
-        status: result.success ? 'SENT' : 'FAILED',
-        messageText: formattedMessage,
-        errorDetails: result.error || null
-      });
-
-      await new Promise(r => setTimeout(r, 80));
-    }
-  }
-
-  // Save Campaign & Logs to Neon PostgreSQL Database
-  const client = await pool.connect();
+  // Insert initial campaign record with status 'PROCESSING'
   try {
-    await client.query('BEGIN');
-    await client.query(`
+    await pool.query(`
       INSERT INTO campaigns (id, account_id, name, template_name, target_segment, total_recipients, sent_count, delivered_count, read_count, failed_count, status)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'COMPLETED')
-      ON CONFLICT (id) DO UPDATE SET sent_count = EXCLUDED.sent_count, delivered_count = EXCLUDED.delivered_count, read_count = EXCLUDED.read_count, failed_count = EXCLUDED.failed_count, status = EXCLUDED.status;
-    `, [finalCampaignId, accId, name || 'Broadcast Campaign', 'custom_broadcast', targetSegment || 'All', recipients.length, finalSent, finalDelivered, finalRead, finalFailed]);
-
-    for (const log of finalLogs) {
-      await client.query(`
-        INSERT INTO campaign_logs (campaign_id, msg_id, customer_name, phone, status, message_text, error_details)
-        VALUES ($1, $2, $3, $4, $5, $6, $7);
-      `, [finalCampaignId, log.msgId || log.msg_id, log.customerName || log.customer_name, log.phone, log.status, log.messageText || log.message_text, log.errorDetails || log.error_details]);
-    }
-    await client.query('COMMIT');
+      VALUES ($1, $2, $3, $4, $5, $6, 0, 0, 0, 0, 'PROCESSING')
+      ON CONFLICT (id) DO UPDATE SET status = 'PROCESSING';
+    `, [finalCampaignId, accId, name || 'Broadcast Campaign', 'custom_broadcast', targetSegment || 'Selected Group', recipients.length]);
   } catch (dbErr) {
-    await client.query('ROLLBACK');
-    console.error('Error saving campaign to Neon DB:', dbErr);
-  } finally {
-    client.release();
+    console.error('Initial campaign insert failed:', dbErr);
+    return res.status(500).json({ error: dbErr.message });
   }
 
+  // Trigger background runner asynchronously
+  runBackgroundBroadcast(finalCampaignId, accId, name, targetSegment, recipients, message, posterUrl);
+
+  // Return response immediately
   res.json({
+    success: true,
     id: finalCampaignId,
-    name,
-    totalRecipients: recipients.length,
-    sent: finalSent,
-    delivered: finalDelivered,
-    read: finalRead,
-    failed: finalFailed,
-    logs: finalLogs
+    status: 'PROCESSING',
+    totalRecipients: recipients.length
   });
 });// 6. Settings & Multi-Owner Accounts Endpoints
 app.get('/api/accounts', async (req, res) => {

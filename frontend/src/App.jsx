@@ -511,86 +511,20 @@ export default function App() {
       return;
     }
 
-    setIsDispatchProgressOpen(true);
-    const total = targetRecipients.length;
-
-    // Load active Meta configuration
-    const activeCreds = activeOwnerAccount || { api_token: '', phone_id: '' };
-    const apiToken = activeCreds.api_token || '';
-    const phoneId = activeCreds.phone_id || '';
-
-    // Step 1: Pre-upload Base64 poster if uploaded
-    let metaMediaId = null;
-    if (posterUrl && posterUrl.startsWith('data:image')) {
-      try {
-        const base64Data = posterUrl.split(',')[1];
-        const blob = await (await fetch(posterUrl)).blob();
-        const formData = new FormData();
-        formData.append('poster', blob, 'poster.jpg');
-        formData.append('account_id', selectedAccountId);
-        
-        const mediaRes = await fetch('/api/upload-media', {
-          method: 'POST',
-          body: formData
-        });
-        if (mediaRes.ok) {
-          const mediaData = await mediaRes.json();
-          metaMediaId = mediaData.metaMediaId;
-        }
-      } catch (e) {
-        console.error('Base64 upload failed:', e);
-      }
-    }
-
-    let sent = 0;
-    let failed = 0;
     const campaignId = 'CMP-' + Date.now().toString().slice(-6);
-    const tempLogs = [];
+    setIsDispatchProgressOpen(true);
+    setDispatchProgress({
+      current: 0,
+      total: targetRecipients.length,
+      percentage: 0,
+      lastProcessed: 'Starting background worker...',
+      sentCount: 0,
+      failedCount: 0
+    });
 
-    // Step 2: Message Send Loop
-    for (let i = 0; i < total; i++) {
-      const recipient = targetRecipients[i];
-      const messageText = formatTemplateMessage(customMessage, recipient.name);
-      
-      setDispatchProgress({
-        current: i + 1,
-        total,
-        percentage: Math.round(((i + 1) / total) * 100),
-        lastProcessed: recipient.name,
-        sentCount: sent,
-        failedCount: failed
-      });
-
-      const res = await sendSingleWhatsAppMessage(recipient.phone, messageText, metaMediaId, phoneId, apiToken);
-      
-      if (res.success) {
-        sent++;
-      } else {
-        failed++;
-      }
-
-      tempLogs.push({
-        msgId: res.messageId || ('ERR.' + Math.random().toString(36).substring(2, 8)),
-        customerName: recipient.name,
-        phone: recipient.phone,
-        status: res.success ? 'SENT' : 'FAILED',
-        messageText: messageText,
-        errorDetails: res.error || null
-      });
-
-      setDispatchProgress(prev => ({
-        ...prev,
-        sentCount: sent,
-        failedCount: failed
-      }));
-
-      // Throttle delay
-      await new Promise(r => setTimeout(r, 100));
-    }
-
-    // Step 3: Save logs to Neon DB with logOnly mode
     try {
-      await fetch('/api/broadcast', {
+      // 1. Post to backend to trigger background campaign
+      const res = await fetch('/api/broadcast', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -600,26 +534,56 @@ export default function App() {
           recipients: targetRecipients,
           message: customMessage,
           posterUrl,
-          logOnly: true,
-          campaignId,
-          sentCount: sent,
-          deliveredCount: sent,
-          readCount: sent,
-          failedCount: failed,
-          logs: tempLogs
+          campaignId
         })
       });
-      await fetchBackendData();
-    } catch (e) {
-      console.error('Logs saving failed:', e);
-    }
 
-    setTimeout(() => {
+      if (!res.ok) {
+        throw new Error('Failed to initiate broadcast');
+      }
+
+      // 2. Start polling for this campaign progress
+      const pollInterval = setInterval(async () => {
+        try {
+          const campRes = await fetch(`/api/campaigns?account_id=${selectedAccountId}`);
+          if (campRes.ok) {
+            const camps = await campRes.json();
+            const activeCampaign = camps.find(c => c.id === campaignId);
+            if (activeCampaign) {
+              const processed = (activeCampaign.sent_count || 0) + (activeCampaign.failed_count || 0);
+              const total = activeCampaign.total_recipients || targetRecipients.length;
+              
+              setDispatchProgress({
+                current: processed,
+                total,
+                percentage: Math.round((processed / total) * 100),
+                lastProcessed: activeCampaign.status === 'COMPLETED' ? 'Done' : 'Processing...',
+                sentCount: activeCampaign.sent_count || 0,
+                failedCount: activeCampaign.failed_count || 0
+              });
+
+              if (activeCampaign.status === 'COMPLETED' || processed >= total) {
+                clearInterval(pollInterval);
+                setTimeout(() => {
+                  setIsDispatchProgressOpen(false);
+                  setCampaignName('');
+                  setPastedText('');
+                  fetchBackendData();
+                  alert(`🎉 WhatsApp Broadcast "${campaignName}" background me successfully complete ho gaya!`);
+                }, 1000);
+              }
+            }
+          }
+        } catch (pollErr) {
+          console.error('Error polling status:', pollErr);
+        }
+      }, 1500);
+
+    } catch (e) {
+      console.error(e);
+      alert('Failed to launch campaign broadcast: ' + e.message);
       setIsDispatchProgressOpen(false);
-      setCampaignName('');
-      setPastedText('');
-      alert(`🎉 WhatsApp Broadcast "${campaignName}" Ek Saath ${sent} Logo ko Bhej Diya Gaya hai!`);
-    }, 600);
+    }
   };
 
   // Open campaign logs detail modal
@@ -960,8 +924,8 @@ export default function App() {
               </div>
 
               {/* Live Preview Display */}
-              <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                <div className="card-header" style={{ marginBottom: '20px' }}>
+              <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', alignItems: 'center' }}>
+                <div className="card-header" style={{ marginBottom: '20px', width: '100%' }}>
                   <h3 className="card-title"><i className="fa-solid fa-mobile-screen-button" style={{ color: 'var(--accent-gold)' }}></i> Live Phone Preview</h3>
                 </div>
                 
@@ -1039,8 +1003,8 @@ export default function App() {
               </div>
 
               {/* Template Previewer mockup */}
-              <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                <div className="card-header" style={{ marginBottom: '20px' }}>
+              <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', alignItems: 'center' }}>
+                <div className="card-header" style={{ marginBottom: '20px', width: '100%' }}>
                   <h3 className="card-title"><i className="fa-solid fa-mobile-screen-button" style={{ color: 'var(--accent-gold)' }}></i> Template Preview</h3>
                 </div>
 
