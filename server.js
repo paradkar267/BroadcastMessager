@@ -20,8 +20,8 @@ app.use(cors());
 app.use(express.json({ limit: '25mb' }));
 app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
-// Serve static frontend files
-app.use(express.static(path.join(__dirname)));
+// Serve static built React frontend files
+app.use(express.static(path.join(__dirname, 'frontend/dist')));
 
 // Helper: Format message text placeholders {name}, {{1}}
 function formatTemplateMessage(templateBody, recipientName = 'Valued Guest') {
@@ -190,8 +190,11 @@ app.post('/api/customers', async (req, res) => {
   if (!name || !phone) return res.status(400).json({ error: 'Name and Phone are required' });
 
   const accId = account_id || 1;
+  const cleanedPhone = phone.replace(/[^0-9]/g, '');
+  const formattedPhone = cleanedPhone.length === 10 ? '91' + cleanedPhone : cleanedPhone;
+
   try {
-    const check = await pool.query('SELECT * FROM customers WHERE account_id = $1 AND phone = $2', [accId, phone]);
+    const check = await pool.query('SELECT * FROM customers WHERE account_id = $1 AND phone = $2', [accId, formattedPhone]);
     let result;
     if (check.rows.length > 0) {
       result = await pool.query(
@@ -201,7 +204,7 @@ app.post('/api/customers', async (req, res) => {
     } else {
       result = await pool.query(
         'INSERT INTO customers (account_id, name, phone, tag) VALUES ($1, $2, $3, $4) RETURNING *',
-        [accId, name, phone, tag || 'Customer']
+        [accId, name, formattedPhone, tag || 'Customer']
       );
     }
     res.json(result.rows[0]);
@@ -223,13 +226,16 @@ app.post('/api/customers/import', async (req, res) => {
     let imported = 0;
     for (const c of customers) {
       if (c.name && c.phone) {
-        const check = await client.query('SELECT id FROM customers WHERE account_id = $1 AND phone = $2', [accId, c.phone]);
+        const cleanedPhone = c.phone.replace(/[^0-9]/g, '');
+        const formattedPhone = cleanedPhone.length === 10 ? '91' + cleanedPhone : cleanedPhone;
+
+        const check = await client.query('SELECT id FROM customers WHERE account_id = $1 AND phone = $2', [accId, formattedPhone]);
         if (check.rows.length > 0) {
           await client.query('UPDATE customers SET name = $1, tag = $2 WHERE id = $3', [c.name, c.tag || 'Customer', check.rows[0].id]);
         } else {
           await client.query(
             'INSERT INTO customers (account_id, name, phone, tag) VALUES ($1, $2, $3, $4)',
-            [accId, c.name, c.phone, c.tag || 'Customer']
+            [accId, c.name, formattedPhone, c.tag || 'Customer']
           );
         }
         imported++;
@@ -512,6 +518,11 @@ app.get('/api/webhook', (req, res) => {
 app.post('/api/webhook', (req, res) => {
   console.log('📩 Incoming Meta Webhook Event:', JSON.stringify(req.body, null, 2));
   res.sendStatus(200);
+});
+
+// Fallback wildcard route for React Single Page App routing
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'frontend/dist/index.html'));
 });
 
 // Start Server and Initialize Database

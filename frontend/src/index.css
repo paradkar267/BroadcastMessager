@@ -608,7 +608,7 @@ textarea.form-control {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   width: 90%;
-  max-width: 580px;
+  max-width: 650px;
   box-shadow: var(--shadow-main);
   overflow: hidden;
   transform: scale(0.95);
