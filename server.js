@@ -406,7 +406,7 @@ app.post('/api/accounts', async (req, res) => {
     }
 
     let result;
-    if (id) {
+    if (id && id !== 'NEW' && id !== '') {
       result = await pool.query(`
         UPDATE api_accounts 
         SET profile_name = $1, api_token = $2, phone_id = $3, waba_id = $4, is_default = $5

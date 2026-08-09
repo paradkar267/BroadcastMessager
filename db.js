@@ -99,6 +99,15 @@ async function initDB() {
       ON CONFLICT (id) DO NOTHING;
     `, [process.env.META_ACCESS_TOKEN || '', process.env.META_PHONE_ID || '', process.env.META_WABA_ID || '']);
 
+    // Ensure initial default Owner Account exists in api_accounts
+    const accCheck = await client.query('SELECT id FROM api_accounts LIMIT 1');
+    if (accCheck.rows.length === 0) {
+      await client.query(`
+        INSERT INTO api_accounts (profile_name, api_token, phone_id, waba_id, is_default)
+        VALUES ('Default Owner Account', $1, $2, $3, TRUE);
+      `, [process.env.META_ACCESS_TOKEN || '', process.env.META_PHONE_ID || '', process.env.META_WABA_ID || '']);
+    }
+
     await client.query('COMMIT');
     console.log('✅ Neon PostgreSQL Database Initialized & Tables Verified Successfully');
   } catch (err) {
